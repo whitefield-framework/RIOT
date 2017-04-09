@@ -22,12 +22,14 @@
 #include "nanocoap.h"
 #include "nanocoap_sock.h"
 #include "jerryscript.h"
-
+#include "coap_resources.h"
 #include "thread.h"
 
 #include "xtimer.h"
 
 char jsstack[THREAD_STACKSIZE_MAIN];
+jerry_char_t script[JS_SCRIPT_MAX_SIZE];
+uint8_t internal_value;
 
 #define COAP_INBUF_SIZE (256U)
 
@@ -42,8 +44,6 @@ extern int _netif_config(int argc, char **argv);
 
 void *jsthread_handler(void *arg)
 {
-    jerry_char_t script[50];
-    *script = '\0';
     strcat((char *)script, "print('in js thread');");
     size_t script_size = strlen((char *) script);
     while(1) {
@@ -59,6 +59,10 @@ int main(void)
 {
     puts("RIOT nanocoap example application");
 
+    /* initialize CoAP resources */
+    internal_value = 0;
+    *script = '\0';
+    
     /* nanocoap_server uses gnrc sock which uses gnrc which needs a msg queue */
     msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
 
@@ -76,7 +80,7 @@ int main(void)
                     jsthread_handler,
                     NULL, "js thread");
 
-    /* initialize nanocoap server instance */
+    /* launch nanocoap server instance */
     uint8_t buf[COAP_INBUF_SIZE];
     sock_udp_ep_t local = { .port=COAP_PORT, .family=AF_INET6 };
     puts("I'm in the \"main-thread\" now");

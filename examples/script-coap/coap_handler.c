@@ -10,11 +10,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "coap_resources.h"
 #include "fmt.h"
 #include "nanocoap.h"
-
-/* internal value that can be read/written via CoAP */
-static uint8_t internal_value = 0;
+#include "jerryscript.h"
 
 static ssize_t _riot_board_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)
 {
@@ -25,7 +24,7 @@ static ssize_t _riot_board_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)
 static ssize_t _riot_script_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)
 {
     ssize_t p = 0;
-    char rsp[16];
+    char rsp[JS_SCRIPT_MAX_SIZE];
     unsigned code = COAP_CODE_EMPTY;
 
     /* read coap method type in packet */
@@ -33,16 +32,17 @@ static ssize_t _riot_script_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)
 
     switch(method_flag) {
     case COAP_GET:
-        /* write the response buffer with the internal value */
-        p += fmt_u32_dec(rsp, internal_value);
+        /* write current script in response buffer */
+        memcpy(rsp, (char*)script, strlen((char *) script));
         code = COAP_CODE_205;
         break;
     case COAP_PUT:
     {
-        /* convert the payload to an string and update the internal value */
-        char payload[16] = { 0 };
-        memcpy(payload, (char*)pkt->payload, pkt->payload_len);
-        internal_value = strtol(payload, NULL, 10);
+        /* overwrite the current script with the new received script  */
+        char payload[JS_SCRIPT_MAX_SIZE] = { 0 };
+        memcpy(payload, (char*)pkt->payload, pkt->payload_len);       
+        *script = '\0';
+        strcat((char *)script, payload);
         code = COAP_CODE_CHANGED;
     }
     }
