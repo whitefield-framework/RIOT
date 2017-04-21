@@ -23,8 +23,7 @@ static ssize_t _riot_board_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)
 
 static ssize_t _riot_script_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)
 {
-    ssize_t p = 0;
-    char rsp[JS_SCRIPT_MAX_SIZE];
+    ssize_t rsp_len = 0;
     unsigned code = COAP_CODE_EMPTY;
 
     /* read coap method type in packet */
@@ -32,23 +31,23 @@ static ssize_t _riot_script_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)
 
     switch(method_flag) {
     case COAP_GET:
-        /* write current script in response buffer */
-        memcpy(rsp, (char*)script, strlen((char *) script));
         code = COAP_CODE_205;
+        rsp_len = strlen((char*)script);
         break;
+    case COAP_POST:
     case COAP_PUT:
     {
         /* overwrite the current script with the new received script  */
-        char payload[JS_SCRIPT_MAX_SIZE] = { 0 };
-        memcpy(payload, (char*)pkt->payload, pkt->payload_len);       
-        *script = '\0';
-        strcat((char *)script, payload);
+        memcpy(script, (char*)pkt->payload, pkt->payload_len);
+        script[pkt->payload_len] = '\0';
+        printf("new script:\"%s\"\n", script);
         code = COAP_CODE_CHANGED;
+        break;
     }
     }
 
     return coap_reply_simple(pkt, code, buf, len,
-            COAP_FORMAT_TEXT, (uint8_t*)rsp, p);
+            COAP_FORMAT_TEXT, (uint8_t*)script, rsp_len);
 }
 
 static ssize_t _riot_value_handler(coap_pkt_t *pkt, uint8_t *buf, size_t len)

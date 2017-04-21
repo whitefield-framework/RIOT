@@ -26,6 +26,7 @@ USEMODULE += auto_init_gnrc_netif
 USEMODULE += gnrc_udp
 # Additional networking modules that can be dropped if not needed
 USEMODULE += gnrc_icmpv6_echo
+USEMODULE += gnrc_ipv6_router_default
 
 #
 USEMODULE += gnrc_sock_udp
@@ -49,7 +50,7 @@ USEPKG += jerryscript
 #CFLAGS += -DDEVELHELP
 
 # Set stack size to something (conservatively) enormous
-CFLAGS += -DTHREAD_STACKSIZE_MAIN=1092
+CFLAGS += -DTHREAD_STACKSIZE_MAIN=8092
 
 # Change this to 0 show compiler invocation lines by default:
 QUIET ?= 1

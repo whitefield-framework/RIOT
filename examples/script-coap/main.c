@@ -44,12 +44,9 @@ extern int _netif_config(int argc, char **argv);
 
 void *jsthread_handler(void *arg)
 {
-    strcat((char *)script, "print('in js thread');");
-    size_t script_size = strlen((char *) script);
     while(1) {
-    /* puts("I'm in the \"js-thread\" now"); */
-    jerry_run_simple(script, script_size, JERRY_INIT_EMPTY);
-    xtimer_sleep(30);
+        jerry_run_simple(script, strlen((char*)script), JERRY_INIT_EMPTY);
+        xtimer_sleep(5);
     }
     return NULL;
 }
