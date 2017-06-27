@@ -1,6 +1,6 @@
 BUILD_DIR  ?= $(CURDIR)/riot
 
-JERRYHEAP  ?= 16
+JERRYHEAP  ?= 8
 
  EXT_CFLAGS :=-D__TARGET_RIOT
 

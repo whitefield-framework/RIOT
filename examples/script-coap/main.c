@@ -45,7 +45,12 @@ extern int _netif_config(int argc, char **argv);
 void *jsthread_handler(void *arg)
 {
     while(1) {
-        jerry_run_simple(script, strlen((char*)script), JERRY_INIT_EMPTY);
+        if(strlen((char*)script)) {
+            jerry_run_simple(script, strlen((char*)script), JERRY_INIT_EMPTY);
+            }
+        else {
+            puts("(empty initial script)\n");
+        }
         xtimer_sleep(5);
     }
     return NULL;
