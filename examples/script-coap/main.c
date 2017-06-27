@@ -30,6 +30,7 @@
 char jsstack[THREAD_STACKSIZE_MAIN];
 jerry_char_t script[JS_SCRIPT_MAX_SIZE];
 uint8_t internal_value;
+uint8_t counter=0;
 
 #define COAP_INBUF_SIZE (256U)
 
@@ -49,7 +50,10 @@ void *jsthread_handler(void *arg)
             jerry_run_simple(script, strlen((char*)script), JERRY_INIT_EMPTY);
             }
         else {
-            puts("(empty initial script)\n");
+            if (!counter) {
+                puts("(empty initial script)\n");
+                counter++;
+                }
         }
         xtimer_sleep(5);
     }
@@ -59,7 +63,7 @@ void *jsthread_handler(void *arg)
 
 int main(void)
 {
-    puts("RIOT nanocoap example application");
+    puts("RIOT CoAP Javascript Demo");
 
     /* initialize CoAP resources */
     internal_value = 0;
@@ -85,7 +89,7 @@ int main(void)
     /* launch nanocoap server instance */
     uint8_t buf[COAP_INBUF_SIZE];
     sock_udp_ep_t local = { .port=COAP_PORT, .family=AF_INET6 };
-    puts("I'm in the \"main-thread\" now");
+    /* puts("I'm in the \"main-thread\" now"); */
     nanocoap_server(&local, buf, sizeof(buf));
 
     /* should be never reached */
