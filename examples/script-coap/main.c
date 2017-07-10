@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 Kaspar Schleiser <kaspar@schleiser.de>
+ * Copyright (C) 2017 Inria
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -11,9 +12,10 @@
  * @{
  *
  * @file
- * @brief       CoAP example server application (using nanocoap)
+ * @brief       Example of .js script as CoAP resource
  *
  * @author      Kaspar Schleiser <kaspar@schleiser.de>
+ * @author      Emmanuel Baccelli <emmanuel.baccelli@inria.fr>
  * @}
  */
 
