@@ -42,7 +42,7 @@ static void _handle_raw_sixlowpan(ble_mac_inbuf_t *inbuf)
             GNRC_NETTYPE_SIXLOWPAN);
 
     if(!pkt) {
-        LOG("_handle_raw_sixlowpan(): no space left in packet buffer.\n");
+        INFO("_handle_raw_sixlowpan(): no space left in packet buffer.\n");
         return;
     }
 
@@ -53,14 +53,14 @@ static void _handle_raw_sixlowpan(ble_mac_inbuf_t *inbuf)
             GNRC_NETTYPE_NETIF);
 
     if (netif_hdr == NULL) {
-        LOG("_handle_raw_sixlowpan(): no space left in packet buffer.\n");
+        INFO("_handle_raw_sixlowpan(): no space left in packet buffer.\n");
         gnrc_pktbuf_release(pkt);
         return;
     }
 
     ((gnrc_netif_hdr_t *)netif_hdr->data)->if_pid = g_wf_pid;
 
-    LOG("_handle_raw_sixlowpan(): received packet from %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x "
+    INFO("_handle_raw_sixlowpan(): received packet from %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x "
             "of length %d\n",
             inbuf->src[0], inbuf->src[1], inbuf->src[2], inbuf->src[3], inbuf->src[4],
             inbuf->src[5], inbuf->src[6], inbuf->src[7], inbuf->len);
@@ -72,7 +72,7 @@ static void _handle_raw_sixlowpan(ble_mac_inbuf_t *inbuf)
 
     /* throw away packet if no one is interested */
     if (!gnrc_netapi_dispatch_receive(pkt->type, GNRC_NETREG_DEMUX_CTX_ALL, pkt)) {
-        LOG("_handle_raw_sixlowpan: unable to forward packet of type %i\n", pkt->type);
+        INFO("_handle_raw_sixlowpan: unable to forward packet of type %i\n", pkt->type);
         gnrc_pktbuf_release(pkt);
     }
 }
@@ -83,7 +83,7 @@ static int _send(gnrc_pktsnip_t *pkt)
 	uint8_t _sendbuf[WF_MAX_PKT_SZ];
 
     if (pkt == NULL) {
-        ERR("_send: pkt was NULL\n");
+        ERROR("_send: pkt was NULL\n");
         return -EINVAL;
     }
 
@@ -95,7 +95,7 @@ static int _send(gnrc_pktsnip_t *pkt)
     unsigned len = 0;
 
     if (pkt->type != GNRC_NETTYPE_NETIF) {
-        ERR("_send: first header is not generic netif header\n");
+        ERROR("_send: first header is not generic netif header\n");
         return -EBADMSG;
     }
 
@@ -129,7 +129,7 @@ static int _send(gnrc_pktsnip_t *pkt)
 		g_l2_stats.tx_mcast_count++;
 	}
 #endif
-	LOG("Sending pkt of sz:%d\n", len);
+	INFO("Sending pkt of sz:%d\n", len);
 
     return 0;
 }
@@ -145,10 +145,10 @@ static int _handle_set(gnrc_netapi_opt_t *_opt)
             res = sizeof(uint16_t);
             switch ((*(uint16_t *)value)) {
                 case IEEE802154_SHORT_ADDRESS_LEN:
-                    LOG("SHORT ADDRESS LEN set\n");
+                    INFO("SHORT ADDRESS LEN set\n");
                     break;
                 case IEEE802154_LONG_ADDRESS_LEN:
-                    LOG("LONG ADDRESS LEN set\n");
+                    INFO("LONG ADDRESS LEN set\n");
                     break;
                 default:
                     res = -EAFNOSUPPORT;
@@ -215,7 +215,7 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
     memset(&g_l2_stats, 0, sizeof(g_l2_stats));
 #endif
 
-    LOG("gnrc_whitefield_6lowpan: starting thread\n");
+    INFO("gnrc_whitefield_6lowpan: starting thread\n");
 
     g_wf_pid = thread_getpid();
 
@@ -231,14 +231,14 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
 
     /* start the event loop */
     while (1) {
-//        LOG("gnrc_whitefield_6lowpan: waiting for incoming messages\n");
+//        INFO("gnrc_whitefield_6lowpan: waiting for incoming messages\n");
         msg_receive(&msg);
         /* dispatch NETDEV and NETAPI messages */
         switch (msg.type) {
 #if 0
             case BLE_EVENT_RX_DONE:
                 {
-                    LOG("ble rx:\n");
+                    INFO("ble rx:\n");
                     _handle_raw_sixlowpan(msg.content.ptr);
                     ble_mac_busy_rx = 0;
                     break;
@@ -252,7 +252,7 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
                 opt = msg.content.ptr;
                 /* set option for device driver */
                 res = _handle_set(opt);
-                LOG("SET received. opt=%s res:%i\n", netopt2str(opt->opt), res);
+                INFO("SET received. opt=%s res:%i\n", netopt2str(opt->opt), res);
                 /* send reply to calling thread */
                 reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
                 reply.content.value = (uint32_t)res;
@@ -262,14 +262,14 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
                 /* read incoming options */
                 opt = msg.content.ptr;
                 res = _handle_get(opt);
-                //LOG("GET: opt=%s res:%i\n", netopt2str(opt->opt), res);
+                //INFO("GET: opt=%s res:%i\n", netopt2str(opt->opt), res);
                 /* send reply to calling thread */
                 reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
                 reply.content.value = (uint32_t)res;
                 msg_reply(&msg, &reply);
                 break;
             default:
-                LOG("gnrc_whitefield_6lowpan: Unknown command %" PRIu16 "\n", msg.type);
+                INFO("gnrc_whitefield_6lowpan: Unknown command %" PRIu16 "\n", msg.type);
                 break;
         }
     }
@@ -280,7 +280,11 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
 void gnrc_whitefield_6lowpan_init(void)
 {
 	if(wf_get_nodeid() == 0xffff) {
-		ERR("Nodeid not passed white execution. -w <nodeid>\n");
+		ERROR("Nodeid not passed white execution. -w <nodeid>\n");
+		abort();
+	}
+	if(wf_init()) {
+		ERROR("whitefield init failed\n");
 		abort();
 	}
     kernel_pid_t res = thread_create(g_stack, sizeof(g_stack), WF_PRIO,
@@ -288,6 +292,6 @@ void gnrc_whitefield_6lowpan_init(void)
                         _gnrc_whitefield_6lowpan_thread, NULL,
                         "whitefield");
     assert(res > 0);
-	LOG("Whitefield 6Lowpan Thread created. Nodeid=0x%x\n", wf_get_nodeid());
+	INFO("Whitefield 6Lowpan Thread created. Nodeid=0x%x\n", wf_get_nodeid());
     (void)res;
 }

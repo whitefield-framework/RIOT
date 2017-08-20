@@ -1,8 +1,8 @@
 WHITEFIELD_SRC=$(RIOTBASE)/pkg/whitefield/src
 
-INCLUDES += -I$(WHITEFIELD_SRC)
+INCLUDES += -I$(WHITEFIELD_SRC) -I$(RIOTBASE)/../../src/commline
 
-#CFLAGS += -DNRF52
+#CFLAGS += -Werror=pedantic
 
 DIRS += $(WHITEFIELD_SRC)
 

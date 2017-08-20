@@ -19,9 +19,10 @@ typedef struct _node_info_ {
 #endif
 #include "debug.h"
 
-#define	ERR(...)	fprintf(stderr,__VA_ARGS__)
-#define	LOG(...)	DEBUG(__VA_ARGS__)
+#define	ERROR(...)	fprintf(stderr,__VA_ARGS__)
+#define	INFO(...)	DEBUG(__VA_ARGS__)
 
+int wf_init(void);
 uint16_t wf_get_nodeid(void);
 int wf_get_longaddr(uint8_t *value, unsigned int val_len);
 

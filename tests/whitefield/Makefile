@@ -40,4 +40,7 @@ USEMODULE += netstats_l2
 #Define PANID and CHANNEL used by default
 #CFLAGS += -DOPENTHREAD_PANID=0xbeef -DOPENTHREAD_CHANNEL=11
 
+export LINKFLAGS += -L$(RIOTBASE)/../../bin -lwf_commline_32
+
 include $(RIOTBASE)/Makefile.include
+
