@@ -109,7 +109,6 @@ static int _send(gnrc_pktsnip_t *pkt)
     else {
         dst = gnrc_netif_hdr_get_dst_addr(netif_hdr);
     }
-	(void)dst;
 
     /* prepare packet for sending */
     while (payload) {
@@ -119,6 +118,7 @@ static int _send(gnrc_pktsnip_t *pkt)
         buf +=  payload->size;
         payload = payload->next;
     }
+	wf_send_pkt(dst, _sendbuf, len);
 
     gnrc_pktbuf_release(pkt);
 #ifdef	MODULE_NETSTATS_L2

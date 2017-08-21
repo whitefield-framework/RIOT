@@ -10,10 +10,6 @@
 */
 #define	WF_MAX_PKT_SZ	127
 
-typedef struct _node_info_ {
-	uint16_t id;	//Whitefield Node Index
-}wf_node_info_t;
-
 #ifndef	ENABLE_DEBUG
 #define ENABLE_DEBUG    (1)
 #endif
@@ -25,5 +21,6 @@ typedef struct _node_info_ {
 int wf_init(void);
 uint16_t wf_get_nodeid(void);
 int wf_get_longaddr(uint8_t *value, unsigned int val_len);
+int wf_send_pkt(const uint8_t *dst, const uint8_t *buf, const unsigned len);
 
 #endif	//	_WHITEFIELD_H_
