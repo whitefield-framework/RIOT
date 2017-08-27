@@ -1,2 +1,12 @@
--Configurable MAX_PACKET_SIZE ... currently the default is 127. But this can be made runtime.
--Use interface IID 
+[URGENT]
+- Handle L2 ACK
+- Handle command handlers for OAM
+- Handle recv L2 stats
+
+[LATER]
+- Configurable MAX_PACKET_SIZE ... currently the default is 127. But this can be made runtime.
+	currently we have a compile time MACRO, so no worries.
+- Handle Lqi, rssi? Does currently RIOT supports use of LQI/RSSI? (Check on RIOT ML)
+
+[DONE]
+- Use interface IID 

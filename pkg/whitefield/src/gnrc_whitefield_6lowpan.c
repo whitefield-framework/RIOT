@@ -27,22 +27,24 @@
 
 #define WF_NETAPI_MSG_QUEUE_SIZE   (8U)
 #define WF_PRIO                    (THREAD_PRIORITY_MAIN - 1)
+#define	WF_EVENT_RX_DONE			20000
 
+wf_pkt_t g_wf_pkt;
 kernel_pid_t g_wf_pid;
 static char g_stack[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
+static char g_stack_recvwf[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
 #ifdef MODULE_NETSTATS_L2
 static netstats_t g_l2_stats;
 #endif
 
-#if 0
-static void _handle_raw_sixlowpan(ble_mac_inbuf_t *inbuf)
+static void handle_raw_sixlowpan(wf_pkt_t *inbuf)
 {
-    gnrc_pktsnip_t *pkt = gnrc_pktbuf_add(NULL, inbuf->payload,
+    gnrc_pktsnip_t *pkt = gnrc_pktbuf_add(NULL, inbuf->buf,
             inbuf->len,
             GNRC_NETTYPE_SIXLOWPAN);
 
     if(!pkt) {
-        INFO("_handle_raw_sixlowpan(): no space left in packet buffer.\n");
+        ERROR("no space left in packet buffer.\n");
         return;
     }
 
@@ -53,30 +55,32 @@ static void _handle_raw_sixlowpan(ble_mac_inbuf_t *inbuf)
             GNRC_NETTYPE_NETIF);
 
     if (netif_hdr == NULL) {
-        INFO("_handle_raw_sixlowpan(): no space left in packet buffer.\n");
+        ERROR("no space left in packet buffer.\n");
         gnrc_pktbuf_release(pkt);
         return;
     }
 
+    gnrc_netif_hdr_init(netif_hdr->data, WF_L2ADDR_LEN, WF_L2ADDR_LEN);
+    gnrc_netif_hdr_set_src_addr(netif_hdr->data, inbuf->src, WF_L2ADDR_LEN);
+    gnrc_netif_hdr_set_dst_addr(netif_hdr->data, inbuf->dst, WF_L2ADDR_LEN);
     ((gnrc_netif_hdr_t *)netif_hdr->data)->if_pid = g_wf_pid;
 
-    INFO("_handle_raw_sixlowpan(): received packet from %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x "
-            "of length %d\n",
+    INFO("rcvd pkt from %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x "
+            "of len %d\n",
             inbuf->src[0], inbuf->src[1], inbuf->src[2], inbuf->src[3], inbuf->src[4],
             inbuf->src[5], inbuf->src[6], inbuf->src[7], inbuf->len);
 #if defined(MODULE_OD) && ENABLE_DEBUG
-    od_hex_dump(inbuf->payload, inbuf->len, OD_WIDTH_DEFAULT);
+    od_hex_dump(inbuf->buf, inbuf->len, OD_WIDTH_DEFAULT);
 #endif
 
     LL_APPEND(pkt, netif_hdr);
 
     /* throw away packet if no one is interested */
     if (!gnrc_netapi_dispatch_receive(pkt->type, GNRC_NETREG_DEMUX_CTX_ALL, pkt)) {
-        INFO("_handle_raw_sixlowpan: unable to forward packet of type %i\n", pkt->type);
+        ERROR("unable to forward packet of type %i\n", pkt->type);
         gnrc_pktbuf_release(pkt);
     }
 }
-#endif
 
 static int _send(gnrc_pktsnip_t *pkt)
 {
@@ -129,8 +133,6 @@ static int _send(gnrc_pktsnip_t *pkt)
 		g_l2_stats.tx_mcast_count++;
 	}
 #endif
-	INFO("Sending pkt of sz:%d\n", len);
-
     return 0;
 }
 
@@ -231,19 +233,17 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
 
     /* start the event loop */
     while (1) {
-//        INFO("gnrc_whitefield_6lowpan: waiting for incoming messages\n");
         msg_receive(&msg);
         /* dispatch NETDEV and NETAPI messages */
         switch (msg.type) {
-#if 0
-            case BLE_EVENT_RX_DONE:
+            case WF_EVENT_RX_DONE:
                 {
-                    INFO("ble rx:\n");
-                    _handle_raw_sixlowpan(msg.content.ptr);
-                    ble_mac_busy_rx = 0;
+					wf_pkt_t *pkt = msg.content.ptr;
+                    INFO("wf recvd pkt=%d\n", pkt->len);
+                    handle_raw_sixlowpan(pkt);
+                    pkt->len = 0;
                     break;
                 }
-#endif
             case GNRC_NETAPI_MSG_TYPE_SND:
                 _send(msg.content.ptr);
                 break;
@@ -277,6 +277,41 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
     return NULL;
 }
 
+#define	WAIT_FOR_COND(COND, SLPTIME_MS)	\
+	{\
+		int loopcnt=0;\
+		while(loopcnt++ < SLPTIME_MS) {\
+			if(COND) break;\
+			usleep(1000);\
+		}\
+		if(loopcnt>=SLPTIME_MS) {\
+			ERROR("COND %s never reached. Behaviour Undefined!\n", #COND);\
+		}\
+	}
+static void *stackline_recvthread(void *args)
+{
+	msg_t m;
+	wf_pkt_t *pkt=&g_wf_pkt;
+	int sz;
+
+	(void)args;
+	WAIT_FOR_COND(g_wf_pid > 0, 1000);//Wait for other thread to start
+	INFO("wf stackline_recvthread started g_wf_pid:%d\n", g_wf_pid);
+
+	while(1) {
+		sz = wf_recv_pkt(pkt);	//Blocking call
+		if(!sz) continue;
+		m.type = WF_EVENT_RX_DONE;
+		m.content.ptr = pkt;
+		if(!msg_send_int(&m, g_wf_pid)) {
+			ERROR("msg send failed to internal q, possible lost intr\n");
+			pkt->len=0;
+		}
+		WAIT_FOR_COND(pkt->len==0,1000);
+	}
+	return NULL;
+}
+
 void gnrc_whitefield_6lowpan_init(void)
 {
 	if(wf_get_nodeid() == 0xffff) {
@@ -290,8 +325,12 @@ void gnrc_whitefield_6lowpan_init(void)
     kernel_pid_t res = thread_create(g_stack, sizeof(g_stack), WF_PRIO,
                         THREAD_CREATE_STACKTEST,
                         _gnrc_whitefield_6lowpan_thread, NULL,
-                        "whitefield");
+                        "WF NETAPI");
     assert(res > 0);
-	INFO("Whitefield 6Lowpan Thread created. Nodeid=0x%x\n", wf_get_nodeid());
+    res = thread_create(g_stack_recvwf, sizeof(g_stack_recvwf), WF_PRIO,
+					THREAD_CREATE_STACKTEST,
+					stackline_recvthread, NULL,
+					"WF RECV");
+	INFO("Whitefield Inited. Nodeid=0x%x\n", wf_get_nodeid());
     (void)res;
 }
