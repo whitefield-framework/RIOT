@@ -24,14 +24,19 @@ USEMODULE += random
 USEMODULE += ps
 USEMODULE += ipv6_addr
 USEMODULE += gnrc_udp
+USEMODULE += gnrc_rpl
+USEMODULE += gnrc_icmpv6
+USEMODULE += auto_init_gnrc_rpl
+USEMODULE += gnrc_icmpv6_echo
 USEMODULE += gnrc_ipv6_router_default
 USEMODULE += auto_init_gnrc_netif
 USEMODULE += gnrc_sixlowpan
 USEMODULE += gnrc_sixlowpan_iphc
-USEMODULE += gnrc_ipv6_default
 USEMODULE += gnrc_netdev
 USEMODULE += gnrc_ipv6_netif
 USEMODULE += netstats_l2
+USEMODULE += netstats_ipv6
+USEMODULE += netstats_rpl
 
 #required for C++ compiling
 #CXXEXFLAGS += -fno-rtti
