@@ -10,3 +10,6 @@
 
 [DONE]
 - Use interface IID 
+
+[BUGS in RIOT]
+ipv6_addr_to_str ... len is not used in strcpy. len is uint8_t. if you pass > 256 bytes then it dfails. Strangely even if i pass 256 as result_len, it fails... 

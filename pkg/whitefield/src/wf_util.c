@@ -35,7 +35,7 @@ int wf_send_pkt(const uint8_t *dst, const uint8_t *buf, const unsigned len)
 	mbuf->src_id = wf_nodeid;
 	mbuf->dst_id = cl_get_longaddr2id(dst);
 
-	INFO("SEND src:%0x dst:%0x len:%d\n", mbuf->src_id, mbuf->dst_id, mbuf->len);
+	INFO("SEND src:%0x dst:%0x len:%d totlen:%d\n", mbuf->src_id, mbuf->dst_id, mbuf->len, mbuf->len + sizeof(msg_buf_t));
 	if(CL_SUCCESS != cl_sendto_q(MTYPE(AIRLINE, CL_MGR_ID), mbuf, mbuf->len + sizeof(msg_buf_t))) {
 		//TODO mac_call_sent_callback(sent, ptr, MAC_TX_ERR_FATAL, 3);
 	}
@@ -58,7 +58,21 @@ int wf_recv_pkt(wf_pkt_t *pkt)
 		return 0;
 	}
 	if(mbuf->flags & MBUF_IS_CMD) {
+#if 1
+		//Hack Alert!! Notice that the foll condn will never be true
+		//This condition had to be added so that cmd_* function are linked in the 
+		//binary. Linker decides that cmd_* functions are never called from 
+		//any other place and optimizes out! But I need these functions to be 
+		//loaded dynamically using dlsym(). Using this check i sort of fool linker 
+		//into believing that the function is called, but the wrapping cond will 
+		//never be true.
+		if(mbuf->len == 0xdead && mbuf->len == 0xc0de) {
+			extern int cmd_rtsize(uint16_t, char *, int);
+			cmd_rtsize(0xbabe, NULL, 0xcafe);
+		}
+#endif
 		sl_handle_cmd(mbuf);
+		INFO("RETURNING len:%d sizeof=%d\n", mbuf->len, sizeof(msg_buf_t));
 		cl_sendto_q(MTYPE(MONITOR, CL_MGR_ID), mbuf, mbuf->len+sizeof(msg_buf_t));
 		return 0;
 	}
