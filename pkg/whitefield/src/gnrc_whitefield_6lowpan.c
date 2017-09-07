@@ -44,7 +44,7 @@ static void handle_raw_sixlowpan(wf_pkt_t *inbuf)
             GNRC_NETTYPE_SIXLOWPAN);
 
     if(!pkt) {
-        ERROR("no space left in packet buffer.\n");
+        ERROR("whitefield: no space left in packet buffer.\n");
         return;
     }
 

@@ -2,14 +2,13 @@
 - Handle L2 ACK
 - Handle command handlers for OAM
 - Handle recv L2 stats
+- Use setenv from forker to set the nodeid in RIOT ... If this works then there wont be any changes in the native riot folder.
 
 [LATER]
 - Configurable MAX_PACKET_SIZE ... currently the default is 127. But this can be made runtime.
 	currently we have a compile time MACRO, so no worries.
 - Handle Lqi, rssi? Does currently RIOT supports use of LQI/RSSI? (Check on RIOT ML)
 
-[DONE]
-- Use interface IID 
-
 [BUGS in RIOT]
-ipv6_addr_to_str ... len is not used in strcpy. len is uint8_t. if you pass > 256 bytes then it dfails. Strangely even if i pass 256 as result_len, it fails... 
+- ipv6_addr_to_str ... len is not used in strcpy. len is uint8_t. if you pass > 256 bytes then it dfails. Strangely even if i pass 256 as result_len, it fails... 
+- gnrc_icmpv6.c icmpv6 receive failure handling needs to release the pkt.

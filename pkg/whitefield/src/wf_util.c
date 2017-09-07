@@ -36,6 +36,11 @@ int wf_send_pkt(const uint8_t *dst, const uint8_t *buf, const unsigned len)
 	mbuf->dst_id = cl_get_longaddr2id(dst);
 
 	INFO("SEND src:%0x dst:%0x len:%d totlen:%d\n", mbuf->src_id, mbuf->dst_id, mbuf->len, mbuf->len + sizeof(msg_buf_t));
+#if 1
+	static int send_cnt=0;
+	send_cnt++;
+	PRINT_HEX(mbuf->buf, mbuf->len, "sent %d, len=%d\n", send_cnt, mbuf->len);
+#endif
 	if(CL_SUCCESS != cl_sendto_q(MTYPE(AIRLINE, CL_MGR_ID), mbuf, mbuf->len + sizeof(msg_buf_t))) {
 		//TODO mac_call_sent_callback(sent, ptr, MAC_TX_ERR_FATAL, 3);
 	}
