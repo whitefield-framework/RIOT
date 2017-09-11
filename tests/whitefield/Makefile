@@ -27,10 +27,10 @@ USEMODULE += gnrc_udp
 USEMODULE += gnrc_rpl
 USEMODULE += gnrc_icmpv6
 USEMODULE += auto_init_gnrc_rpl
-USEMODULE += gnrc_icmpv6_echo
-USEMODULE += gnrc_ipv6_router_default
+#USEMODULE += gnrc_icmpv6_echo
+#USEMODULE += gnrc_ipv6_router_default
 USEMODULE += auto_init_gnrc_netif
-USEMODULE += gnrc_sixlowpan
+#USEMODULE += gnrc_sixlowpan
 USEMODULE += gnrc_sixlowpan_iphc
 USEMODULE += gnrc_netdev
 USEMODULE += gnrc_ipv6_netif
@@ -41,9 +41,6 @@ USEMODULE += netstats_rpl
 #required for C++ compiling
 #CXXEXFLAGS += -fno-rtti
 #USEMODULE += cpp11-compat
-
-#Define PANID and CHANNEL used by default
-#CFLAGS += -DOPENTHREAD_PANID=0xbeef -DOPENTHREAD_CHANNEL=11
 
 export LINKFLAGS += -L$(RIOTBASE)/../../bin -lwf_commline_32
 

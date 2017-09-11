@@ -31,14 +31,18 @@ int wf_init(void)
 
 int wf_send_pkt(const uint8_t *dst, const uint8_t *buf, const unsigned len)
 {
+	struct timeval tv;
 	DEFINE_MBUF(mbuf);
 	mbuf->len = len;
 	memcpy(mbuf->buf, buf, len);
 	mbuf->src_id = wf_nodeid;
 	mbuf->dst_id = cl_get_longaddr2id(dst);
 
-	INFO("SEND src:%0x dst:%0x len:%d totlen:%d\n", mbuf->src_id, mbuf->dst_id, mbuf->len, mbuf->len + sizeof(msg_buf_t));
-#if 1
+	gettimeofday(&tv, NULL);
+	INFO("SEND (%ld:%ld) src:%0x dst:%0x len:%d totlen:%d\n", 
+		tv.tv_sec, tv.tv_usec,
+		mbuf->src_id, mbuf->dst_id, mbuf->len, mbuf->len + sizeof(msg_buf_t));
+#if 0
 	static int send_cnt=0;
 	send_cnt++;
 	PRINT_HEX(mbuf->buf, mbuf->len, "sent %d, len=%d\n", send_cnt, mbuf->len);
@@ -51,13 +55,16 @@ int wf_send_pkt(const uint8_t *dst, const uint8_t *buf, const unsigned len)
 
 int wf_recv_pkt(wf_pkt_t *pkt)
 {
+	struct timeval tv;
 	DEFINE_MBUF(mbuf);
 
 	cl_recvfrom_q(MTYPE(STACKLINE, wf_nodeid), mbuf, sizeof(mbuf_buf), 0);
 	if(!mbuf->len) {
 		return 0;
 	}
-	INFO("RECV src:%x dst:%x len:%d flags:%x\n",
+	gettimeofday(&tv, NULL);
+	INFO("RECV (%ld:%ld) src:%x dst:%x len:%d flags:%x\n",
+			tv.tv_sec, tv.tv_usec,
 			mbuf->src_id, mbuf->dst_id, mbuf->len, mbuf->flags);
 	if(mbuf->len >= sizeof(pkt->buf)) {
 		ERROR("How can mbuflen(%d) be greater than bufsize:%d?!\n", 
