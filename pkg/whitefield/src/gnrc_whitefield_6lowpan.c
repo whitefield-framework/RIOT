@@ -10,6 +10,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <sys/time.h>
 
 #include "msg.h"
 #include "net/gnrc.h"
@@ -32,7 +33,7 @@
 wf_pkt_t g_wf_pkt;
 kernel_pid_t g_wf_pid;
 static char g_stack[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
-static char g_stack_recvwf[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
+//static char g_stack_recvwf[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
 #ifdef MODULE_NETSTATS_L2
 static netstats_t g_l2_stats;
 #endif
@@ -212,6 +213,7 @@ static int _handle_get(gnrc_netapi_opt_t *_opt)
  */
 static void *_gnrc_whitefield_6lowpan_thread(void *args)
 {
+	struct timeval tv;
 	(void)args;
 #ifdef MODULE_NETSTATS_L2
     memset(&g_l2_stats, 0, sizeof(g_l2_stats));
@@ -233,8 +235,12 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
 
     /* start the event loop */
     while (1) {
+		gettimeofday(&tv, NULL);
+		INFO("blocking on msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
         msg_receive(&msg);
         /* dispatch NETDEV and NETAPI messages */
+		gettimeofday(&tv, NULL);
+		INFO("got msg msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
         switch (msg.type) {
             case WF_EVENT_RX_DONE:
                 {
@@ -288,7 +294,7 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
 			ERROR("COND %s never reached. Behaviour Undefined!\n", #COND);\
 		}\
 	}
-static void *stackline_recvthread(void *args)
+void *stackline_recvthread(void *args)
 {
 	msg_t m;
 	wf_pkt_t *pkt=&g_wf_pkt;
@@ -327,10 +333,12 @@ void gnrc_whitefield_6lowpan_init(void)
                         _gnrc_whitefield_6lowpan_thread, NULL,
                         "WF NETAPI");
     assert(res > 0);
+#if 0
     res = thread_create(g_stack_recvwf, sizeof(g_stack_recvwf), WF_PRIO,
 					THREAD_CREATE_STACKTEST,
 					stackline_recvthread, NULL,
 					"WF RECV");
+#endif
 	INFO("Whitefield Inited. Nodeid=0x%x\n", wf_get_nodeid());
     (void)res;
 }

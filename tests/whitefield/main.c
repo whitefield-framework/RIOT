@@ -42,12 +42,15 @@ static const shell_command_t shell_commands[] = {
 
 int main(void)
 {
+	extern void *stackline_recvthread(void *args);
 	msg_init_queue(_main_msg_queue, MAIN_QUEUE_SIZE);
 	printf("WHITEFIELD-RIOT network stack application\n");
 
 #if 0
 	char line_buf[SHELL_DEFAULT_BUFSIZE];
 	shell_run(shell_commands, line_buf, SHELL_DEFAULT_BUFSIZE);
+#else
+	stackline_recvthread(NULL);
 #endif
 
     return 0;
