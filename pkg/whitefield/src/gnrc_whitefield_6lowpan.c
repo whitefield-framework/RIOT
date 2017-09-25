@@ -236,11 +236,11 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
     /* start the event loop */
     while (1) {
 		gettimeofday(&tv, NULL);
-		INFO("blocking on msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
+//		INFO("blocking on msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
         msg_receive(&msg);
         /* dispatch NETDEV and NETAPI messages */
 		gettimeofday(&tv, NULL);
-		INFO("got msg msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
+//		INFO("got msg msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
         switch (msg.type) {
             case WF_EVENT_RX_DONE:
                 {
