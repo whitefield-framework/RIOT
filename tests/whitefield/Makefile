@@ -43,6 +43,7 @@ USEMODULE += netstats_rpl
 #USEMODULE += cpp11-compat
 
 export LINKFLAGS += -L$(RIOTBASE)/../../bin -lwf_commline_32
+#CFLAGS += -DGNRC_PKTBUF_SIZE=127
 
 include $(RIOTBASE)/Makefile.include
 

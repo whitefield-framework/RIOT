@@ -7,7 +7,9 @@ PKG_SRCDIR=$(PKG_BUILDDIR)/src
 
 MODULE_MAKEFILE := $(PKG_DIR)/Makefile.module
 
-.PHONY: all clean distclean
+.PHONY: all prepare clean distclean
+
+prepare:
 
 all:
 
