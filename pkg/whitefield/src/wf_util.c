@@ -86,8 +86,6 @@ int wf_recv_pkt(wf_pkt_t *pkt)
 		}
 #endif
 		sl_handle_cmd(mbuf);
-		INFO("RETURNING len:%d sizeof=%d\n", mbuf->len, sizeof(msg_buf_t));
-		cl_sendto_q(MTYPE(MONITOR, CL_MGR_ID), mbuf, mbuf->len+sizeof(msg_buf_t));
 		return 0;
 	}
 	memcpy(pkt->buf, mbuf->buf, mbuf->len);
