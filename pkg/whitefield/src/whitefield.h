@@ -9,6 +9,7 @@
 	Configuration Options
 */
 #define	WF_MAX_PKT_SZ	127
+#define	WF_MAX_FRAG_SZ	90
 #define	WF_L2ADDR_LEN	8
 
 #ifndef	ENABLE_DEBUG

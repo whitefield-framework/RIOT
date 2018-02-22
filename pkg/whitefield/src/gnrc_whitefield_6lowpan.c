@@ -117,6 +117,10 @@ static int _send(gnrc_pktsnip_t *pkt)
 
     /* prepare packet for sending */
     while (payload) {
+		if(len+payload->size >= sizeof(_sendbuf)) {
+			ERROR("--- READY TO CRASH len=%d size:%d sizeof(_sendbuf):%zu\n", 
+					len, payload->size, sizeof(_sendbuf));
+		}
 		assert(len+payload->size<sizeof(_sendbuf));
         memcpy(buf, payload->data, payload->size);
         len += payload->size;
@@ -183,7 +187,7 @@ static int _handle_get(gnrc_netapi_opt_t *_opt)
             break;
 		case NETOPT_MAX_PACKET_SIZE:
 			assert(_opt->data_len >= 2);
-			*((uint16_t*)value) = WF_MAX_PKT_SZ;
+			*((uint16_t*)value) = WF_MAX_FRAG_SZ;
 			res = sizeof(uint16_t);
 			break;
 #ifdef MODULE_NETSTATS_L2
