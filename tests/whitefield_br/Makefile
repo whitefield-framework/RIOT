@@ -1,4 +1,4 @@
-APPLICATION = riot-whitefield
+APPLICATION = riot-whitefield-br
 
 # If no BOARD is found in the environment, use this default:
 BOARD ?= native
@@ -38,6 +38,13 @@ USEMODULE += gnrc_ipv6_netif
 USEMODULE += netstats_l2
 USEMODULE += netstats_ipv6
 USEMODULE += netstats_rpl
+USEMODULE += gnrc_sixlowpan_border_router_default
+USEMODULE += gnrc_icmpv6_echo
+USEMODULE += fib
+USEMODULE += gnrc_uhcpc
+
+TAP ?= tap0
+IPV6_PREFIX ?= 2001:db8::/64
 
 #required for C++ compiling
 #CXXEXFLAGS += -fno-rtti
