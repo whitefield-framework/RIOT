@@ -92,7 +92,7 @@ static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count)
     mrf24j40_tx_prepare(dev);
 
     /* load packet data into FIFO */
-    for (int i = 0; i < count; i++, ptr++) {
+    for (unsigned i = 0; i < count; i++, ptr++) {
         /* current packet data + FCS too long */
         if ((len + ptr->iov_len + 2) > IEEE802154_FRAME_LEN_MAX) {
             DEBUG("[mrf24j40] error: packet too large (%u byte) to be send\n",
@@ -106,6 +106,8 @@ static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count)
         len = mrf24j40_tx_load(dev, ptr->iov_base, ptr->iov_len, len);
         if (i == 0) {
             dev->header_len = len;
+            /* Grab the FCF bits from the frame header */
+            dev->fcf_low = *(uint8_t*)(ptr->iov_base);
         }
 
     }
@@ -154,9 +156,11 @@ static int _recv(netdev_t *netdev, void *buf, size_t len, void *info)
 
     if (info != NULL) {
         netdev_ieee802154_rx_info_t *radio_info = info;
+        uint8_t rssi_scalar = 0;
         /* Read LQI and RSSI values from the RX fifo */
         mrf24j40_rx_fifo_read(dev, phr + 1, &(radio_info->lqi), 1);
-        mrf24j40_rx_fifo_read(dev, phr + 2, &(radio_info->rssi), 1);
+        mrf24j40_rx_fifo_read(dev, phr + 2, &(rssi_scalar), 1);
+        radio_info->rssi = mrf24j40_dbm_from_reg(rssi_scalar);
     }
 
     /* Turn on reception of packets off the air */
@@ -316,6 +320,15 @@ static int _get(netdev_t *netdev, netopt_t opt, void *val, size_t max_len)
             }
             else {
                 *((int8_t *)val) = mrf24j40_get_cca_threshold(dev);
+                res = sizeof(int8_t);
+            }
+            break;
+        case NETOPT_TX_RETRIES_NEEDED:
+            if (max_len < sizeof(uint8_t)) {
+                res = -EOVERFLOW;
+            }
+            else {
+                *((uint8_t *)val) = dev->tx_retries;
                 res = sizeof(int8_t);
             }
             break;
@@ -538,6 +551,7 @@ static void _isr(netdev_t *netdev)
 #ifdef MODULE_NETSTATS_L2
         if (netdev->event_callback && (dev->netdev.flags & MRF24J40_OPT_TELL_TX_END)) {
             uint8_t txstat = mrf24j40_reg_read_short(dev, MRF24J40_REG_TXSTAT);
+            dev->tx_retries = (txstat >> MRF24J40_TXSTAT_MAX_FRAME_RETRIES_SHIFT);
             /* transmision failed */
             if (txstat & MRF24J40_TXSTAT_TXNSTAT) {
                 /* TX_NOACK - CCAFAIL */
