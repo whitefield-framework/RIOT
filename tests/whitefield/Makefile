@@ -12,7 +12,7 @@ RIOTBASE ?= $(CURDIR)/../..
 CFLAGS += -DDEVELHELP -Wall
 
 # Change this to 0 show compiler invocation lines by default:
-QUIET ?= 0
+QUIET ?= 1
 
 USEPKG += whitefield
 
@@ -22,6 +22,7 @@ USEMODULE += random
 #USEMODULE += shell
 #USEMODULE += shell_commands
 USEMODULE += ps
+USEMODULE += fib
 USEMODULE += ipv6_addr
 USEMODULE += gnrc_udp
 USEMODULE += gnrc_rpl
@@ -33,8 +34,6 @@ USEMODULE += auto_init_gnrc_netif
 #USEMODULE += gnrc_sixlowpan
 USEMODULE += gnrc_sixlowpan_iphc
 USEMODULE += gnrc_sixlowpan_frag
-USEMODULE += gnrc_netdev
-USEMODULE += gnrc_ipv6_netif
 USEMODULE += netstats_l2
 USEMODULE += netstats_ipv6
 USEMODULE += netstats_rpl
@@ -44,7 +43,7 @@ USEMODULE += netstats_rpl
 #USEMODULE += cpp11-compat
 
 export LINKFLAGS += -L$(RIOTBASE)/../../bin -lwf_commline_32
-CFLAGS += -DGNRC_PKTBUF_SIZE=90
+CFLAGS += -DGNRC_PKTBUF_SIZE=110
 
 include $(RIOTBASE)/Makefile.include
 

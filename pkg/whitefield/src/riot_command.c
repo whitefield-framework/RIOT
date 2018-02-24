@@ -1,12 +1,12 @@
 #define	_RIOT_COMMAND_C_
 
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include "thread.h"
-#include "net/af.h"
+//#include "net/af.h"
+//#include <arpa/inet.h>
 #ifdef MODULE_GNRC_NETIF
 #include "net/gnrc/netif.h"
 #endif

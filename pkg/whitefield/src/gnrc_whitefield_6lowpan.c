@@ -26,17 +26,18 @@
 #include "od.h"
 #endif
 
-#define WF_NETAPI_MSG_QUEUE_SIZE   (8U)
+//#define WF_NETAPI_MSG_QUEUE_SIZE   (8U)
 #define WF_PRIO                    (THREAD_PRIORITY_MAIN - 1)
 #define	WF_EVENT_RX_DONE			20000
 
-wf_pkt_t g_wf_pkt;
-kernel_pid_t g_wf_pid;
+//wf_pkt_t g_wf_pkt;
 static char g_stack[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
 //static char g_stack_recvwf[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
 #ifdef MODULE_NETSTATS_L2
 static netstats_t g_l2_stats;
 #endif
+
+static gnrc_netif_t *_wf_netif = NULL;
 
 static void handle_raw_sixlowpan(wf_pkt_t *inbuf)
 {
@@ -64,7 +65,7 @@ static void handle_raw_sixlowpan(wf_pkt_t *inbuf)
     gnrc_netif_hdr_init(netif_hdr->data, WF_L2ADDR_LEN, WF_L2ADDR_LEN);
     gnrc_netif_hdr_set_src_addr(netif_hdr->data, inbuf->src, WF_L2ADDR_LEN);
     gnrc_netif_hdr_set_dst_addr(netif_hdr->data, inbuf->dst, WF_L2ADDR_LEN);
-    ((gnrc_netif_hdr_t *)netif_hdr->data)->if_pid = g_wf_pid;
+    ((gnrc_netif_hdr_t *)netif_hdr->data)->if_pid = _wf_netif->pid;
 
     INFO("rcvd pkt from %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x "
             "of len %d\n",
@@ -141,65 +142,56 @@ static int _send(gnrc_pktsnip_t *pkt)
     return 0;
 }
 
-static int _handle_set(gnrc_netapi_opt_t *_opt)
+static int _netdev_set(netdev_t *netdev, netopt_t opt,
+                       const void *value, size_t value_len)
 {
-    int res = -ENOTSUP;
-    uint8_t *value = _opt->data;
-
-    switch (_opt->opt) {
-        case NETOPT_SRC_LEN:
-            assert(_opt->data_len == sizeof(uint16_t));
-            res = sizeof(uint16_t);
-            switch ((*(uint16_t *)value)) {
-                case IEEE802154_SHORT_ADDRESS_LEN:
-                    INFO("SHORT ADDRESS LEN set\n");
-                    break;
-                case IEEE802154_LONG_ADDRESS_LEN:
-                    INFO("LONG ADDRESS LEN set\n");
-                    break;
-                default:
-                    res = -EAFNOSUPPORT;
-                    break;
-            }
-            break;
-        default:
-            break;
-    }
-    return res;
+    (void)netdev;
+    (void)opt;
+    (void)value;
+    (void)value_len;
+    return -ENOTSUP;
 }
 
-static int _handle_get(gnrc_netapi_opt_t *_opt)
+static int _netdev_get(netdev_t *netdev, netopt_t opt,
+                       void *v, size_t max_len)
 {
     int res = -ENOTSUP;
-    uint8_t *value = _opt->data;
+    uint8_t *value = v;
 
-    switch (_opt->opt) {
+    (void)netdev;
+    switch (opt) {
         case NETOPT_IPV6_IID:
         case NETOPT_ADDRESS_LONG:
-			wf_get_longaddr(value, _opt->data_len);
+            assert(max_len >= WF_L2ADDR_LEN);
+			wf_get_longaddr(value, max_len);
             res = IEEE802154_LONG_ADDRESS_LEN;
             break;
         case NETOPT_ADDR_LEN:
         case NETOPT_SRC_LEN:
-            assert(_opt->data_len == sizeof(uint16_t));
+            assert(max_len == sizeof(uint16_t));
             *((uint16_t *)value) = IEEE802154_LONG_ADDRESS_LEN;
             res = sizeof(uint16_t);
             break;
 		case NETOPT_MAX_PACKET_SIZE:
-			assert(_opt->data_len >= 2);
+			assert(max_len >= 2);
 			*((uint16_t*)value) = WF_MAX_FRAG_SZ;
 			res = sizeof(uint16_t);
 			break;
+        case NETOPT_DEVICE_TYPE:
+            assert(max_len == sizeof(uint16_t));
+            *((uint16_t *)value) = NETDEV_TYPE_IEEE802154;
+            res = sizeof(uint16_t);
+            break;
 #ifdef MODULE_NETSTATS_L2
         case NETOPT_STATS:
-            assert(_opt->data_len == sizeof(uintptr_t));
+            assert(max_len == sizeof(uintptr_t));
             *((netstats_t **)value) = &g_l2_stats;
             res = sizeof(uintptr_t);
             break;
 #endif
 #ifdef MODULE_GNRC
         case NETOPT_PROTO:
-            assert(_opt->data_len == sizeof(gnrc_nettype_t));
+            assert(max_len == sizeof(gnrc_nettype_t));
             *((gnrc_nettype_t *)value) = GNRC_NETTYPE_SIXLOWPAN;
             res = sizeof(gnrc_nettype_t);
             break;
@@ -210,6 +202,7 @@ static int _handle_get(gnrc_netapi_opt_t *_opt)
     return res;
 }
 
+#if 0
 /**
  * @brief   Startup code and event loop of the gnrc_whitefield_6lowpan layer
  *
@@ -286,6 +279,7 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
     /* never reached */
     return NULL;
 }
+#endif
 
 #define	WAIT_FOR_COND(COND, SLPTIME_MS)	\
 	{\
@@ -298,22 +292,23 @@ static void *_gnrc_whitefield_6lowpan_thread(void *args)
 			ERROR("COND %s never reached. Behaviour Undefined!\n", #COND);\
 		}\
 	}
+
 void *stackline_recvthread(void *args)
 {
 	msg_t m;
-	wf_pkt_t *pkt=&g_wf_pkt;
+    wf_pkt_t wf_pkt;
+	wf_pkt_t *pkt=&wf_pkt;
 	int sz;
 
 	(void)args;
-	WAIT_FOR_COND(g_wf_pid > 0, 1000);//Wait for other thread to start
-	INFO("wf stackline_recvthread started g_wf_pid:%d\n", g_wf_pid);
+	INFO("wf stackline_recvthread started\n");
 
 	while(1) {
 		sz = wf_recv_pkt(pkt);	//Blocking call
 		if(!sz) continue;
 		m.type = WF_EVENT_RX_DONE;
 		m.content.ptr = pkt;
-		if(!msg_send_int(&m, g_wf_pid)) {
+		if(!msg_send_int(&m, _wf_netif->pid)) {
 			ERROR("msg send failed to internal q, possible lost intr\n");
 			pkt->len=0;
 		}
@@ -322,8 +317,39 @@ void *stackline_recvthread(void *args)
 	return NULL;
 }
 
-void gnrc_whitefield_6lowpan_init(void)
+static void _netif_msg_handler(gnrc_netif_t *netif, msg_t *msg)
 {
+    (void)netif;
+    switch (msg->type) {
+        case WF_EVENT_RX_DONE:
+            {
+                wf_pkt_t *pkt = msg->content.ptr;
+                INFO("wf recvd pkt=%d\n", pkt->len);
+                handle_raw_sixlowpan(pkt);
+                pkt->len = 0;
+                break;
+            }
+    }
+}
+
+static int _netif_send(gnrc_netif_t *netif, gnrc_pktsnip_t *pkt)
+{
+    (void)netif;
+    assert(netif == _wf_netif);
+    return _send(pkt);
+}
+
+static gnrc_pktsnip_t *_netif_recv(gnrc_netif_t *netif)
+{
+    (void)netif;
+    /* not supported */
+    return NULL;
+}
+
+static int _netdev_init(netdev_t *dev)
+{
+    _wf_netif = dev->context;
+    _wf_netif->l2addr_len = WF_L2ADDR_LEN;
 	if(wf_get_nodeid() == 0xffff) {
 		ERROR("Nodeid not passed white execution. -w <nodeid>\n");
 		abort();
@@ -332,17 +358,34 @@ void gnrc_whitefield_6lowpan_init(void)
 		ERROR("whitefield init failed\n");
 		abort();
 	}
-    kernel_pid_t res = thread_create(g_stack, sizeof(g_stack), WF_PRIO,
-                        THREAD_CREATE_STACKTEST,
-                        _gnrc_whitefield_6lowpan_thread, NULL,
-                        "WF NETAPI");
-    assert(res > 0);
-#if 0
-    res = thread_create(g_stack_recvwf, sizeof(g_stack_recvwf), WF_PRIO,
-					THREAD_CREATE_STACKTEST,
-					stackline_recvthread, NULL,
-					"WF RECV");
-#endif
 	INFO("Whitefield Inited. Nodeid=0x%x\n", wf_get_nodeid());
-    (void)res;
+    return 0;
+}
+
+static const gnrc_netif_ops_t _wf_ops = {
+    .init = NULL,
+    .send = _netif_send,
+    .recv = _netif_recv,
+    .get = gnrc_netif_get_from_netdev,
+    .set = gnrc_netif_set_from_netdev,
+    .msg_handler = _netif_msg_handler,
+};
+
+static const netdev_driver_t _wf_netdev_driver = {
+    .send = NULL,
+    .recv = NULL,
+    .init = _netdev_init,
+    .isr  =  NULL,
+    .get  = _netdev_get,
+    .set  = _netdev_set,
+};
+
+static netdev_t _wf_dummy_dev = {
+    .driver = &_wf_netdev_driver,
+};
+
+void gnrc_whitefield_6lowpan_init(void)
+{
+    gnrc_netif_create(g_stack, sizeof(g_stack), WF_PRIO,
+                      "WF NETAPI", &_wf_dummy_dev, &_wf_ops);
 }
