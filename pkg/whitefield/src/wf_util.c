@@ -16,7 +16,7 @@ uint16_t wf_get_nodeid(void)
 int wf_get_longaddr(uint8_t *value, unsigned int val_len)
 {
 	int ret = cl_get_id2longaddr(wf_nodeid, value, val_len);
-	value[0] ^= 0x2;
+//	value[0] ^= 0x2;
 	return ret;
 }
 

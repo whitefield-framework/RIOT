@@ -145,11 +145,31 @@ static int _send(gnrc_pktsnip_t *pkt)
 static int _netdev_set(netdev_t *netdev, netopt_t opt,
                        const void *value, size_t value_len)
 {
+    int res=-ENOTSUP;
+
     (void)netdev;
-    (void)opt;
-    (void)value;
-    (void)value_len;
-    return -ENOTSUP;
+    switch(opt) {
+        case NETOPT_SRC_LEN:
+            assert(value_len == sizeof(uint16_t));
+            res = sizeof(uint16_t);
+            switch ((*(uint16_t *)value)) {
+                case IEEE802154_SHORT_ADDRESS_LEN:
+                    INFO("SHORT ADDRESS LEN set\n");
+                    break;
+                case IEEE802154_LONG_ADDRESS_LEN:
+                    INFO("LONG ADDRESS LEN set\n");
+                    break;
+                default:
+                    res = -ENOTSUP;
+                    break;
+            }
+            break;
+        default:
+            INFO("netdev_set not handled for opt=%d\n", opt);
+            break;
+    }
+
+    return res;
 }
 
 static int _netdev_get(netdev_t *netdev, netopt_t opt,
@@ -161,8 +181,9 @@ static int _netdev_get(netdev_t *netdev, netopt_t opt,
     (void)netdev;
     switch (opt) {
         case NETOPT_IPV6_IID:
+        case NETOPT_ADDRESS:
         case NETOPT_ADDRESS_LONG:
-            assert(max_len >= WF_L2ADDR_LEN);
+            assert(max_len == WF_L2ADDR_LEN);
 			wf_get_longaddr(value, max_len);
             res = IEEE802154_LONG_ADDRESS_LEN;
             break;
@@ -197,6 +218,7 @@ static int _netdev_get(netdev_t *netdev, netopt_t opt,
             break;
 #endif
         default:
+            INFO("NETOPT not handled!! %d\n", opt);
             break;
     }
     return res;
@@ -354,6 +376,7 @@ static int _netdev_init(netdev_t *dev)
 		ERROR("Nodeid not passed white execution. -w <nodeid>\n");
 		abort();
 	}
+    wf_get_longaddr(_wf_netif->l2addr, WF_L2ADDR_LEN);
 	if(wf_init()) {
 		ERROR("whitefield init failed\n");
 		abort();

@@ -133,8 +133,10 @@ int get_def_route(char *buf, int buflen)
 
 	*buf=0;
 	if (table->table_type == FIB_TABLE_TYPE_SH) {
+        printf("table_sz:%d\n", table->size);
 		for (size_t i = 0; i < table->size; ++i) {
-			if (table->data.entries[i].lifetime != 0) {
+            printf("i:%d lifetime:%lld\n", i, table->data.entries[i].lifetime);
+			 if (table->data.entries[i].lifetime != 0) {
 				pref_len=0;
 				if(table->data.entries[i].global_flags & FIB_FLAG_NET_PREFIX_MASK) {
 					uint32_t prefix = (table->data.entries[i].global_flags
@@ -142,13 +144,16 @@ int get_def_route(char *buf, int buflen)
 					pref_len = (int)(prefix >> FIB_FLAG_NET_PREFIX_SHIFT);
 				}
 				if(!pref_len) {
+                    printf("getting it\n");
 					get_addr_str(table->data.entries[i].next_hop, buf, buflen>120?120:buflen);
+                    printf("got it\n");
 					break;
 				}
 			}
 		}
 	}
 	mutex_unlock(&(table->mtx_access));
+    printf("exiting\n");
 	return strlen(buf);
 }
 
@@ -244,6 +249,7 @@ int cmd_rpl_stats(uint16_t id, char *buf, int buflen)
 int cmd_def_route(uint16_t id, char *buf, int buflen)
 {
 	(void)id;
+    printf("handle_cmd: cmd_def_route id=%d\n", id);
 	return get_def_route(buf, buflen);
 }
 

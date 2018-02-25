@@ -17,6 +17,7 @@ QUIET ?= 1
 USEPKG += whitefield
 
 USEMODULE += whitefield
+USEMODULE += netdev_ieee802154
 USEMODULE += xtimer
 USEMODULE += random
 #USEMODULE += shell
@@ -43,7 +44,7 @@ USEMODULE += netstats_rpl
 #USEMODULE += cpp11-compat
 
 export LINKFLAGS += -L$(RIOTBASE)/../../bin -lwf_commline_32
-CFLAGS += -DGNRC_PKTBUF_SIZE=110
+CFLAGS += -DGNRC_PKTBUF_SIZE=90
 
 include $(RIOTBASE)/Makefile.include
 
