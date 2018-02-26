@@ -26,13 +26,9 @@
 #include "od.h"
 #endif
 
-//#define WF_NETAPI_MSG_QUEUE_SIZE   (8U)
-#define WF_PRIO                    (THREAD_PRIORITY_MAIN - 1)
 #define	WF_EVENT_RX_DONE			20000
 
-//wf_pkt_t g_wf_pkt;
 static char g_stack[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
-//static char g_stack_recvwf[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
 #ifdef MODULE_NETSTATS_L2
 static netstats_t g_l2_stats;
 #endif
@@ -224,85 +220,6 @@ static int _netdev_get(netdev_t *netdev, netopt_t opt,
     return res;
 }
 
-#if 0
-/**
- * @brief   Startup code and event loop of the gnrc_whitefield_6lowpan layer
- *
- * @return          never returns
- */
-static void *_gnrc_whitefield_6lowpan_thread(void *args)
-{
-	struct timeval tv;
-	(void)args;
-#ifdef MODULE_NETSTATS_L2
-    memset(&g_l2_stats, 0, sizeof(g_l2_stats));
-#endif
-
-    INFO("gnrc_whitefield_6lowpan: starting thread\n");
-
-    g_wf_pid = thread_getpid();
-
-    gnrc_netapi_opt_t *opt;
-    int res;
-    msg_t msg, reply, msg_queue[WF_NETAPI_MSG_QUEUE_SIZE];
-
-    /* setup the message queue */
-    msg_init_queue(msg_queue, WF_NETAPI_MSG_QUEUE_SIZE);
-
-    /* register the device to the network stack*/
-    gnrc_netif_add(thread_getpid());
-
-    /* start the event loop */
-    while (1) {
-		gettimeofday(&tv, NULL);
-//		INFO("blocking on msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
-        msg_receive(&msg);
-        /* dispatch NETDEV and NETAPI messages */
-		gettimeofday(&tv, NULL);
-//		INFO("got msg msg_receive %ld:%ld\n", tv.tv_sec, tv.tv_usec);
-        switch (msg.type) {
-            case WF_EVENT_RX_DONE:
-                {
-					wf_pkt_t *pkt = msg.content.ptr;
-                    INFO("wf recvd pkt=%d\n", pkt->len);
-                    handle_raw_sixlowpan(pkt);
-                    pkt->len = 0;
-                    break;
-                }
-            case GNRC_NETAPI_MSG_TYPE_SND:
-                _send(msg.content.ptr);
-                break;
-            case GNRC_NETAPI_MSG_TYPE_SET:
-                /* read incoming options */
-                opt = msg.content.ptr;
-                /* set option for device driver */
-                res = _handle_set(opt);
-                INFO("SET received. opt=%s res:%i\n", netopt2str(opt->opt), res);
-                /* send reply to calling thread */
-                reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
-                reply.content.value = (uint32_t)res;
-                msg_reply(&msg, &reply);
-                break;
-            case GNRC_NETAPI_MSG_TYPE_GET:
-                /* read incoming options */
-                opt = msg.content.ptr;
-                res = _handle_get(opt);
-                //INFO("GET: opt=%s res:%i\n", netopt2str(opt->opt), res);
-                /* send reply to calling thread */
-                reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
-                reply.content.value = (uint32_t)res;
-                msg_reply(&msg, &reply);
-                break;
-            default:
-                INFO("gnrc_whitefield_6lowpan: Unknown command %" PRIu16 "\n", msg.type);
-                break;
-        }
-    }
-    /* never reached */
-    return NULL;
-}
-#endif
-
 #define	WAIT_FOR_COND(COND, SLPTIME_MS)	\
 	{\
 		int loopcnt=0;\
@@ -351,6 +268,9 @@ static void _netif_msg_handler(gnrc_netif_t *netif, msg_t *msg)
                 pkt->len = 0;
                 break;
             }
+        default:
+            ERROR("_netif_msg_handler: Unknown msg->type:%d\n", msg->type);
+            break;
     }
 }
 
@@ -409,6 +329,6 @@ static netdev_t _wf_dummy_dev = {
 
 void gnrc_whitefield_6lowpan_init(void)
 {
-    gnrc_netif_create(g_stack, sizeof(g_stack), WF_PRIO,
+    gnrc_netif_create(g_stack, sizeof(g_stack), (THREAD_PRIORITY_MAIN - 1),
                       "WF NETAPI", &_wf_dummy_dev, &_wf_ops);
 }

@@ -13,6 +13,9 @@
 #include "net/fib.h"
 #include "net/fib/table.h"
 #include "net/gnrc/ipv6.h"
+#include "net/gnrc/rpl/dodag.h"
+#include "net/gnrc/rpl/structs.h"
+
 
 #ifdef MODULE_IPV6_ADDR
 #include "net/ipv6/addr.h"
@@ -125,42 +128,41 @@ int get_lifetime_str(uint64_t lifetime, char *buf, int len)
 	return snprintf(buf, len, "NEVER");
 }
 
-int get_def_route(char *buf, int buflen)
+gnrc_rpl_dodag_t *gnrc_get_first_inst_dag(void)
 {
-	int pref_len=0;
-	fib_table_t *table=&gnrc_ipv6_fib_table;
-	mutex_lock(&(table->mtx_access));
-
-	*buf=0;
-	if (table->table_type == FIB_TABLE_TYPE_SH) {
-        printf("table_sz:%d\n", table->size);
-		for (size_t i = 0; i < table->size; ++i) {
-            printf("i:%d lifetime:%lld\n", i, table->data.entries[i].lifetime);
-			 if (table->data.entries[i].lifetime != 0) {
-				pref_len=0;
-				if(table->data.entries[i].global_flags & FIB_FLAG_NET_PREFIX_MASK) {
-					uint32_t prefix = (table->data.entries[i].global_flags
-							& FIB_FLAG_NET_PREFIX_MASK);
-					pref_len = (int)(prefix >> FIB_FLAG_NET_PREFIX_SHIFT);
-				}
-				if(!pref_len) {
-                    printf("getting it\n");
-					get_addr_str(table->data.entries[i].next_hop, buf, buflen>120?120:buflen);
-                    printf("got it\n");
-					break;
-				}
-			}
-		}
-	}
-	mutex_unlock(&(table->mtx_access));
-    printf("exiting\n");
-	return strlen(buf);
+    for (uint8_t i = 0; i < GNRC_RPL_INSTANCES_NUMOF; ++i) {
+        if (gnrc_rpl_instances[i].state != 0) {
+            return &gnrc_rpl_instances[i].dodag;
+        }
+    }
+    return NULL;
 }
 
+int get_def_route(char *buf, int buflen)
+{
+    gnrc_rpl_dodag_t *dag=NULL;
+    gnrc_rpl_parent_t *prnt=NULL;
+
+    dag = gnrc_get_first_inst_dag();
+    if(!dag) {
+        return snprintf(buf, buflen, "NULL");
+    }
+    prnt = dag->parents;
+    if(!prnt || prnt->rank == GNRC_RPL_INFINITE_RANK) {
+        printf("prnt:%p\n", (void*)prnt);
+        return snprintf(buf, buflen, "NULL");
+    }
+    ipv6_addr_to_str(buf, &prnt->addr, buflen>120?120:buflen);
+    printf("got the address:%s\n", buf);
+    return strlen(buf);
+}
+
+//fib_print_routes(table);  //Refer to this function to understand whats happening here.
 int get_route_list(char *buf, int buflen)
 {
 	int n=0, pref_len=0;
 	fib_table_t *table=&gnrc_ipv6_fib_table;
+
 	mutex_lock(&(table->mtx_access));
 
 	if (table->table_type == FIB_TABLE_TYPE_SH) {
