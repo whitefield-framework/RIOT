@@ -22,7 +22,7 @@ int wf_get_longaddr(uint8_t *value, unsigned int val_len)
 
 int wf_init(void)
 {
-	if(cl_init(CL_ATTACHQ)!= CL_SUCCESS) {
+	if(cl_init(MTYPE(STACKLINE, wf_nodeid), CL_ATTACHQ)!= CL_SUCCESS) {
 		ERROR("Failure attaching to commline\n");
 		return -1;
 	}
@@ -39,9 +39,10 @@ int wf_send_pkt(const uint8_t *dst, const uint8_t *buf, const unsigned len)
 	mbuf->dst_id = cl_get_longaddr2id(dst);
 
 	gettimeofday(&tv, NULL);
-	INFO("SEND (%ld:%ld) src:%0x dst:%0x len:%d totlen:%d\n", 
+	INFO("SEND (%ld:%ld) src:%0x dst:%0x len:%d totlen:%d sizeof:%d\n", 
 		tv.tv_sec, tv.tv_usec,
-		mbuf->src_id, mbuf->dst_id, mbuf->len, mbuf->len + sizeof(msg_buf_t));
+		mbuf->src_id, mbuf->dst_id, mbuf->len, mbuf->len + sizeof(msg_buf_t),
+        (int)sizeof(msg_buf_t));
 #if 0
 	static int send_cnt=0;
 	send_cnt++;
