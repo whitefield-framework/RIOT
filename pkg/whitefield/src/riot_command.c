@@ -255,3 +255,8 @@ int cmd_def_route(uint16_t id, char *buf, int buflen)
 	return get_def_route(buf, buflen);
 }
 
+int cmd_route_projection(uint16_t id, char *buf, int buflen)
+{
+	(void)id;
+	return snprintf(buf, buflen, "todo");
+}
