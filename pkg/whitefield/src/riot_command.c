@@ -74,6 +74,12 @@ int cmd_ipv6_stats(uint16_t id, char *buf, int buflen)
 	return snprintf(buf, buflen, "todo");
 }
 
+int cmd_start_udp(uint16_t id, char *buf, int buflen)
+{
+        (void)id;
+        return snprintf(buf, buflen, "todo");
+}
+
 #define FIB_ADDR_PRINT_LENS1(X)     #X
 #define FIB_ADDR_PRINT_LENS2(X)     FIB_ADDR_PRINT_LENS1(X)
 #define FIB_ADDR_PRINT_LENS         FIB_ADDR_PRINT_LENS2(FIB_ADDR_PRINT_LEN)
