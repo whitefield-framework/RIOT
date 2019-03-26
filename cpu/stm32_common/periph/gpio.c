@@ -17,7 +17,7 @@
  * @file
  * @brief       Low-level GPIO driver implementation
  *
- * @author      Hauke Petersen <mail@haukepetersen.de>
+ * @author      Hauke Petersen <hauke.petersen@fu-berlin.de>
  * @author      Fabian Nack <nack@inf.fu-berlin.de>
  * @author      Alexandre Abadie <alexandre.abadie@inria.fr>
  * @author      Katja Kirstein <katja.kirstein@haw-hamburg.de>
@@ -34,6 +34,7 @@
 /* this implementation is not valid for the stm32f1 */
 #ifndef CPU_FAM_STM32F1
 
+#ifdef MODULE_PERIPH_GPIO_IRQ
 /**
  * @brief   The STM32F0 family has 16 external interrupt lines
  */
@@ -43,6 +44,7 @@
  * @brief   Allocate memory for one callback and argument per EXTI channel
  */
 static gpio_isr_ctx_t isr_ctx[EXTI_NUMOF];
+#endif /* MODULE_PERIPH_GPIO_IRQ */
 
 /**
  * @brief   Extract the port base address from the given pin identifier
@@ -83,6 +85,13 @@ int gpio_init(gpio_t pin, gpio_mode_t mode)
     periph_clk_en(IOP, (RCC_IOPENR_GPIOAEN << _port_num(pin)));
 #elif defined (CPU_FAM_STM32L4)
     periph_clk_en(AHB2, (RCC_AHB2ENR_GPIOAEN << _port_num(pin)));
+#ifdef PWR_CR2_IOSV
+    if (port == GPIOG) {
+        /* Port G requires external power supply */
+        periph_clk_en(APB1, RCC_APB1ENR1_PWREN);
+        PWR->CR2 |= PWR_CR2_IOSV;
+    }
+#endif /* PWR_CR2_IOSV */
 #else
     periph_clk_en(AHB1, (RCC_AHB1ENR_GPIOAEN << _port_num(pin)));
 #endif
@@ -102,6 +111,80 @@ int gpio_init(gpio_t pin, gpio_mode_t mode)
     return 0;
 }
 
+void gpio_init_af(gpio_t pin, gpio_af_t af)
+{
+    GPIO_TypeDef *port = _port(pin);
+    uint32_t pin_num = _pin_num(pin);
+
+    /* set pin to AF mode */
+    port->MODER &= ~(3 << (2 * pin_num));
+    port->MODER |= (2 << (2 * pin_num));
+    /* set selected function */
+    port->AFR[(pin_num > 7) ? 1 : 0] &= ~(0xf << ((pin_num & 0x07) * 4));
+    port->AFR[(pin_num > 7) ? 1 : 0] |= (af << ((pin_num & 0x07) * 4));
+}
+
+void gpio_init_analog(gpio_t pin)
+{
+    /* enable clock, needed as this function can be used without calling
+     * gpio_init first */
+#if defined(CPU_FAM_STM32F0) || defined (CPU_FAM_STM32F3) || defined(CPU_FAM_STM32L1)
+    periph_clk_en(AHB, (RCC_AHBENR_GPIOAEN << _port_num(pin)));
+#elif defined (CPU_FAM_STM32L0)
+    periph_clk_en(IOP, (RCC_IOPENR_GPIOAEN << _port_num(pin)));
+#elif defined (CPU_FAM_STM32L4)
+    periph_clk_en(AHB2, (RCC_AHB2ENR_GPIOAEN << _port_num(pin)));
+#else
+    periph_clk_en(AHB1, (RCC_AHB1ENR_GPIOAEN << _port_num(pin)));
+#endif
+    /* set to analog mode */
+    _port(pin)->MODER |= (0x3 << (2 * _pin_num(pin)));
+}
+
+void gpio_irq_enable(gpio_t pin)
+{
+    EXTI->IMR |= (1 << _pin_num(pin));
+}
+
+void gpio_irq_disable(gpio_t pin)
+{
+    EXTI->IMR &= ~(1 << _pin_num(pin));
+}
+
+int gpio_read(gpio_t pin)
+{
+    return (_port(pin)->IDR & (1 << _pin_num(pin)));
+}
+
+void gpio_set(gpio_t pin)
+{
+    _port(pin)->BSRR = (1 << _pin_num(pin));
+}
+
+void gpio_clear(gpio_t pin)
+{
+    _port(pin)->BSRR = (1 << (_pin_num(pin) + 16));
+}
+
+void gpio_toggle(gpio_t pin)
+{
+    if (gpio_read(pin)) {
+        gpio_clear(pin);
+    } else {
+        gpio_set(pin);
+    }
+}
+
+void gpio_write(gpio_t pin, int value)
+{
+    if (value) {
+        gpio_set(pin);
+    } else {
+        gpio_clear(pin);
+    }
+}
+
+#ifdef MODULE_PERIPH_GPIO_IRQ
 int gpio_init_int(gpio_t pin, gpio_mode_t mode, gpio_flank_t flank,
                   gpio_cb_t cb, void *arg)
 {
@@ -160,85 +243,6 @@ int gpio_init_int(gpio_t pin, gpio_mode_t mode, gpio_flank_t flank,
 
     return 0;
 }
-
-void gpio_init_af(gpio_t pin, gpio_af_t af)
-{
-    GPIO_TypeDef *port = _port(pin);
-    uint32_t pin_num = _pin_num(pin);
-
-    /* set pin to AF mode */
-    port->MODER &= ~(3 << (2 * pin_num));
-    port->MODER |= (2 << (2 * pin_num));
-    /* set selected function */
-    port->AFR[(pin_num > 7) ? 1 : 0] &= ~(0xf << ((pin_num & 0x07) * 4));
-    port->AFR[(pin_num > 7) ? 1 : 0] |= (af << ((pin_num & 0x07) * 4));
-}
-
-void gpio_init_analog(gpio_t pin)
-{
-    /* enable clock, needed as this function can be used without calling
-     * gpio_init first */
-#if defined(CPU_FAM_STM32F0) || defined (CPU_FAM_STM32F3) || defined(CPU_FAM_STM32L1)
-    periph_clk_en(AHB, (RCC_AHBENR_GPIOAEN << _port_num(pin)));
-#elif defined (CPU_FAM_STM32L0)
-    periph_clk_en(IOP, (RCC_IOPENR_GPIOAEN << _port_num(pin)));
-#elif defined (CPU_FAM_STM32L4)
-    periph_clk_en(AHB2, (RCC_AHB2ENR_GPIOAEN << _port_num(pin)));
-#else
-    periph_clk_en(AHB1, (RCC_AHB1ENR_GPIOAEN << _port_num(pin)));
-#endif
-    /* set to analog mode */
-    _port(pin)->MODER |= (0x3 << (2 * _pin_num(pin)));
-}
-
-void gpio_irq_enable(gpio_t pin)
-{
-    EXTI->IMR |= (1 << _pin_num(pin));
-}
-
-void gpio_irq_disable(gpio_t pin)
-{
-    EXTI->IMR &= ~(1 << _pin_num(pin));
-}
-
-int gpio_read(gpio_t pin)
-{
-    if (_port(pin)->MODER & (0x3 << (_pin_num(pin) * 2))) {
-        return _port(pin)->ODR & (1 << _pin_num(pin));
-    }
-    else {
-        return _port(pin)->IDR & (1 << _pin_num(pin));
-    }
-}
-
-void gpio_set(gpio_t pin)
-{
-    _port(pin)->BSRR = (1 << _pin_num(pin));
-}
-
-void gpio_clear(gpio_t pin)
-{
-    _port(pin)->BSRR = (1 << (_pin_num(pin) + 16));
-}
-
-void gpio_toggle(gpio_t pin)
-{
-    if (gpio_read(pin)) {
-        gpio_clear(pin);
-    } else {
-        gpio_set(pin);
-    }
-}
-
-void gpio_write(gpio_t pin, int value)
-{
-    if (value) {
-        gpio_set(pin);
-    } else {
-        gpio_clear(pin);
-    }
-}
-
 void isr_exti(void)
 {
     /* only generate interrupts against lines which have their IMR set */
@@ -251,6 +255,7 @@ void isr_exti(void)
     }
     cortexm_isr_end();
 }
+#endif /* MODULE_PERIPH_GPIO_IRQ */
 
 #else
 typedef int dont_be_pedantic;

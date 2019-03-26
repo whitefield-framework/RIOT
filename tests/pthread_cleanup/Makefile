@@ -1,11 +1,13 @@
 include ../Makefile.tests_common
 
-BOARD_BLACKLIST := arduino-mega2560 waspmote-pro arduino-uno arduino-duemilanove
+BOARD_BLACKLIST := arduino-duemilanove arduino-mega2560 arduino-nano \
+                   arduino-uno jiminy-mega256rfr2 mega-xplained waspmote-pro
 # arduino mega2560 uno duemilanove : unknown type name: clockid_t
+# jiminy-mega256rfr2: unknown type name: clockid_t
+# mega-xplained: unknown type name: clockid_t
 
 USEMODULE += pthread
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+include $(RIOTBASE)/Makefile.include

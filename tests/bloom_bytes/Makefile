@@ -1,6 +1,7 @@
 include ../Makefile.tests_common
 
-BOARD_INSUFFICIENT_MEMORY := chronos msb-430 msb-430h telosb wsn430-v1_3b \
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-nano arduino-uno \
+                             chronos msb-430 msb-430h telosb wsn430-v1_3b \
                              wsn430-v1_4 z1
 
 USEMODULE += hashes
@@ -8,9 +9,10 @@ USEMODULE += bloom
 USEMODULE += random
 USEMODULE += xtimer
 
+USEMODULE += fmt
+
 DISABLE_MODULE += auto_init
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+include $(RIOTBASE)/Makefile.include

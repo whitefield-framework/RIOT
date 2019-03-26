@@ -7,7 +7,6 @@ ifneq (,$(filter native,$(BOARD)))
   CFLAGS += -DTEST_ITER=100000000
 endif
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+include $(RIOTBASE)/Makefile.include

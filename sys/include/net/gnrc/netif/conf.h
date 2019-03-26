@@ -7,7 +7,9 @@
  */
 
 /**
- * @ingroup net_gnrc_netif
+ * @defgroup    net_gnrc_netif_conf GNRC network interface configurations
+ * @ingroup     net_gnrc_netif
+ * @ingroup     config
  * @{
  *
  * @file
@@ -45,6 +47,17 @@ extern "C" {
 #endif
 
 /**
+ * @brief       Message queue size for network interface threads
+ *
+ * @attention   This has influence on the used stack memory of the thread, so
+ *              the thread's stack size might need to be adapted if this is
+ *              changed.
+ */
+#ifndef GNRC_NETIF_MSG_QUEUE_SIZE
+#define GNRC_NETIF_MSG_QUEUE_SIZE  (16U)
+#endif
+
+/**
  * @brief   Number of multicast addresses needed for @ref net_gnrc_rpl "RPL".
  *
  * @note    Used for calculation of @ref GNRC_NETIF_IPV6_GROUPS_NUMOF
@@ -70,7 +83,11 @@ extern "C" {
 /**
  * @brief   Maximum number of unicast and anycast addresses per interface
  *
- * Default: 2 (link-local + corresponding global address)
+ * @note    If you change this, please make sure that
+ *          @ref GNRC_NETIF_IPV6_GROUPS_NUMOF is also large enough to fit the
+ *          addresses' solicited nodes multicast addresses.
+ *
+ * Default: 2 (1 link-local + 1 global address)
  */
 #ifndef GNRC_NETIF_IPV6_ADDRS_NUMOF
 #define GNRC_NETIF_IPV6_ADDRS_NUMOF    (2)
@@ -79,11 +96,13 @@ extern "C" {
 /**
  * @brief   Maximum number of multicast groups per interface
  *
- * Default: 2 (all-nodes + solicited-nodes of link-local and global unicast
+ * Default: 3 (all-nodes + solicited-nodes of link-local and global unicast
  * address) + @ref GNRC_NETIF_RPL_ADDR + @ref GNRC_NETIF_IPV6_RTR_ADDR
  */
 #ifndef GNRC_NETIF_IPV6_GROUPS_NUMOF
-#define GNRC_NETIF_IPV6_GROUPS_NUMOF   (2 + GNRC_NETIF_RPL_ADDR + GNRC_NETIF_IPV6_RTR_ADDR)
+#define GNRC_NETIF_IPV6_GROUPS_NUMOF   (GNRC_NETIF_IPV6_ADDRS_NUMOF + \
+                                        GNRC_NETIF_RPL_ADDR + \
+                                        GNRC_NETIF_IPV6_RTR_ADDR + 1)
 #endif
 
 /**

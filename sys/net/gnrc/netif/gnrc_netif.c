@@ -15,16 +15,20 @@
  * @author  Oliver Hahm <oliver.hahm@inria.fr>
  */
 
+#include <string.h>
+
 #include "bitfield.h"
 #include "net/ethernet.h"
 #include "net/ipv6.h"
 #include "net/gnrc.h"
 #ifdef MODULE_GNRC_IPV6_NIB
 #include "net/gnrc/ipv6/nib.h"
+#include "net/gnrc/ipv6.h"
 #endif /* MODULE_GNRC_IPV6_NIB */
-#ifdef MODULE_NETSTATS_IPV6
+#ifdef MODULE_NETSTATS
 #include "net/netstats.h"
 #endif
+#include "fmt.h"
 #include "log.h"
 #include "sched.h"
 
@@ -34,11 +38,10 @@
 #define ENABLE_DEBUG    (0)
 #include "debug.h"
 
-#define _NETIF_NETAPI_MSG_QUEUE_SIZE    (8)
-
 static gnrc_netif_t _netifs[GNRC_NETIF_NUMOF];
 
 static void _update_l2addr_from_dev(gnrc_netif_t *netif);
+static void _configure_netdev(netdev_t *dev);
 static void *_gnrc_netif_thread(void *args);
 static void _event_cb(netdev_t *dev, netdev_event_t event);
 
@@ -101,6 +104,12 @@ int gnrc_netif_get_from_netdev(gnrc_netif_t *netif, gnrc_netapi_opt_t *opt)
 
     gnrc_netif_acquire(netif);
     switch (opt->opt) {
+        case NETOPT_6LO:
+            assert(opt->data_len == sizeof(netopt_enable_t));
+            *((netopt_enable_t *)opt->data) =
+                    (netopt_enable_t)gnrc_netif_is_6ln(netif);
+            res = sizeof(netopt_enable_t);
+            break;
         case NETOPT_HOP_LIMIT:
             assert(opt->data_len == sizeof(uint8_t));
             *((uint8_t *)opt->data) = netif->cur_hl;
@@ -114,6 +123,13 @@ int gnrc_netif_get_from_netdev(gnrc_netif_t *netif, gnrc_netapi_opt_t *opt)
                     assert(opt->data_len == sizeof(netstats_t *));
                     *((netstats_t **)opt->data) = &netif->ipv6.stats;
                     res = sizeof(&netif->ipv6.stats);
+                    break;
+#endif
+#ifdef MODULE_NETSTATS_L2
+                case NETSTATS_LAYER2:
+                    assert(opt->data_len == sizeof(netstats_t *));
+                    *((netstats_t **)opt->data) = &netif->stats;
+                    res = sizeof(&netif->stats);
                     break;
 #endif
                 default:
@@ -172,11 +188,9 @@ int gnrc_netif_get_from_netdev(gnrc_netif_t *netif, gnrc_netapi_opt_t *opt)
             break;
         case NETOPT_IPV6_IID:
             assert(opt->data_len >= sizeof(eui64_t));
-            if (gnrc_netif_ipv6_get_iid(netif, opt->data) == 0) {
-                res = sizeof(eui64_t);
-            }
+            res = gnrc_netif_ipv6_get_iid(netif, opt->data);
             break;
-        case NETOPT_MAX_PACKET_SIZE:
+        case NETOPT_MAX_PDU_SIZE:
             if (opt->context == GNRC_NETTYPE_IPV6) {
                 assert(opt->data_len == sizeof(uint16_t));
                 *((uint16_t *)opt->data) = netif->ipv6.mtu;
@@ -269,7 +283,7 @@ int gnrc_netif_set_from_netdev(gnrc_netif_t *netif,
             gnrc_netif_ipv6_group_leave_internal(netif, opt->data);
             res = sizeof(ipv6_addr_t);
             break;
-        case NETOPT_MAX_PACKET_SIZE:
+        case NETOPT_MAX_PDU_SIZE:
             if (opt->context == GNRC_NETTYPE_IPV6) {
                 assert(opt->data_len == sizeof(uint16_t));
                 netif->ipv6.mtu = *((uint16_t *)opt->data);
@@ -311,6 +325,18 @@ int gnrc_netif_set_from_netdev(gnrc_netif_t *netif,
             res = sizeof(netopt_enable_t);
             break;
 #endif  /* MODULE_GNRC_SIXLOWPAN_IPHC */
+        case NETOPT_RAWMODE:
+            if (*(((netopt_enable_t *)opt->data)) == NETOPT_ENABLE) {
+                netif->flags |= GNRC_NETIF_FLAGS_RAWMODE;
+            }
+            else {
+                netif->flags &= ~GNRC_NETIF_FLAGS_RAWMODE;
+            }
+            /* Also propagate to the netdev device */
+            netif->dev->driver->set(netif->dev, NETOPT_RAWMODE, opt->data,
+                                      opt->data_len);
+            res = sizeof(netopt_enable_t);
+            break;
         default:
             break;
     }
@@ -324,6 +350,11 @@ int gnrc_netif_set_from_netdev(gnrc_netif_t *netif,
                 case NETOPT_ADDR_LEN:
                 case NETOPT_SRC_LEN:
                     _update_l2addr_from_dev(netif);
+                    break;
+                case NETOPT_STATE:
+                    if (*((netopt_state_t *)opt->data) == NETOPT_STATE_RESET) {
+                        _configure_netdev(netif->dev);
+                    }
                     break;
                 default:
                     break;
@@ -346,11 +377,6 @@ gnrc_netif_t *gnrc_netif_get_by_pid(kernel_pid_t pid)
     return NULL;
 }
 
-static inline char _half_byte_to_char(uint8_t half_byte)
-{
-    return (half_byte < 10) ? ('0' + half_byte) : ('a' + (half_byte - 10));
-}
-
 char *gnrc_netif_addr_to_str(const uint8_t *addr, size_t addr_len, char *out)
 {
     char *res = out;
@@ -358,8 +384,7 @@ char *gnrc_netif_addr_to_str(const uint8_t *addr, size_t addr_len, char *out)
     assert((out != NULL) && ((addr != NULL) || (addr_len == 0U)));
     out[0] = '\0';
     for (size_t i = 0; i < addr_len; i++) {
-        *(out++) = _half_byte_to_char(*(addr) >> 4);
-        *(out++) = _half_byte_to_char(*(addr++) & 0xf);
+        out += fmt_byte_hex((out), *(addr++));
         *(out++) = (i == (addr_len - 1)) ? '\0' : ':';
     }
     return res;
@@ -449,25 +474,43 @@ void gnrc_netif_release(gnrc_netif_t *netif)
 #ifdef MODULE_GNRC_IPV6
 static inline bool _addr_anycast(const gnrc_netif_t *netif, unsigned idx);
 static int _addr_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr);
+static int _group_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr);
 
 static char addr_str[IPV6_ADDR_MAX_STR_LEN];
 
 /**
- * @brief   Matches an address by prefix to an address on the interface
+ * @brief   Matches an address by prefix to an address on the interface and
+ *          return length of the best match
+ *
+ * @param[in] netif     the network interface
+ * @param[in] addr      the address to match
+ *
+ * @return  bits up to which the best match matches @p addr
+ * @return  0, if no match was found
+ *
+ * @pre `netif != NULL` and `addr != NULL`
+ */
+static unsigned _match_to_len(const gnrc_netif_t *netif,
+                              const ipv6_addr_t *addr);
+
+/**
+ * @brief   Matches an address by prefix to an address on the interface and
+ *          return index of the best match
  *
  * @param[in] netif     the network interface
  * @param[in] addr      the address to match
  * @param[in] filter    a bitfield with the bits at the position equal to the
  *                      indexes of the addresses you want to include in the
  *                      search set to one. NULL for all addresses
- * @param[out] idx      index of the best match. -1 if no match was found.
  *
- * @return  bits up to which the best match matches @p addr
- * @return  0, if no match was found
+ * @return  index of the best match for @p addr
+ * @return  -1 if no match was found
+ *
+ * @pre `netif != NULL` and `addr != NULL`
  */
-static unsigned _match(const gnrc_netif_t *netif, const ipv6_addr_t *addr,
-                       const uint8_t *filter, int *idx);
-
+static int _match_to_idx(const gnrc_netif_t *netif,
+                        const ipv6_addr_t *addr,
+                        const uint8_t *filter);
 /**
  * @brief Determines the scope of the given address.
  *
@@ -523,7 +566,6 @@ static int _create_candidate_set(const gnrc_netif_t *netif,
 static ipv6_addr_t *_src_addr_selection(gnrc_netif_t *netif,
                                         const ipv6_addr_t *dst,
                                         uint8_t *candidate_set);
-static int _group_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr);
 
 int gnrc_netif_ipv6_addr_add_internal(gnrc_netif_t *netif,
                                       const ipv6_addr_t *addr,
@@ -555,9 +597,6 @@ int gnrc_netif_ipv6_addr_add_internal(gnrc_netif_t *netif,
         gnrc_netif_release(netif);
         return -ENOMEM;
     }
-    netif->ipv6.addrs_flags[idx] = flags;
-    memcpy(&netif->ipv6.addrs[idx], addr, sizeof(netif->ipv6.addrs[idx]));
-#ifdef MODULE_GNRC_IPV6_NIB
 #if GNRC_IPV6_NIB_CONF_ARSM
     ipv6_addr_t sol_nodes;
     int res;
@@ -567,11 +606,15 @@ int gnrc_netif_ipv6_addr_add_internal(gnrc_netif_t *netif,
     ipv6_addr_set_solicited_nodes(&sol_nodes, addr);
     res = gnrc_netif_ipv6_group_join_internal(netif, &sol_nodes);
     if (res < 0) {
-        DEBUG("nib: Can't join solicited-nodes of %s on interface %u\n",
+        DEBUG("gnrc_netif: Can't join solicited-nodes of %s on interface %" PRIkernel_pid "\n",
               ipv6_addr_to_str(addr_str, addr, sizeof(addr_str)),
               netif->pid);
+        return res;
     }
 #endif /* GNRC_IPV6_NIB_CONF_ARSM */
+    netif->ipv6.addrs_flags[idx] = flags;
+    memcpy(&netif->ipv6.addrs[idx], addr, sizeof(netif->ipv6.addrs[idx]));
+#ifdef MODULE_GNRC_IPV6_NIB
     if (_get_state(netif, idx) == GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_VALID) {
         void *state = NULL;
         gnrc_ipv6_nib_pl_t ple;
@@ -588,8 +631,13 @@ int gnrc_netif_ipv6_addr_add_internal(gnrc_netif_t *netif,
         }
     }
 #if GNRC_IPV6_NIB_CONF_SLAAC
-    else {
-        /* TODO: send out NS to solicited nodes for DAD probing */
+    else if (!gnrc_netif_is_6ln(netif)) {
+        /* cast to remove const qualifier (will still be used NIB internally as
+         * const) */
+        msg_t msg = { .type = GNRC_IPV6_NIB_DAD,
+                      .content = { .ptr = &netif->ipv6.addrs[idx] } };
+
+        msg_send(&msg, gnrc_ipv6_pid);
     }
 #endif
 #else
@@ -636,7 +684,7 @@ int gnrc_netif_ipv6_addr_idx(gnrc_netif_t *netif,
     int idx;
 
     assert((netif != NULL) && (addr != NULL));
-    DEBUG("gnrc_netif: get index of %s from inteface %i\n",
+    DEBUG("gnrc_netif: get index of %s from interface %" PRIkernel_pid "\n",
           ipv6_addr_to_str(addr_str, addr, sizeof(addr_str)),
           netif->pid);
     gnrc_netif_acquire(netif);
@@ -648,11 +696,9 @@ int gnrc_netif_ipv6_addr_idx(gnrc_netif_t *netif,
 int gnrc_netif_ipv6_addr_match(gnrc_netif_t *netif,
                                const ipv6_addr_t *addr)
 {
-    int idx;
-
     assert((netif != NULL) && (addr != NULL));
     gnrc_netif_acquire(netif);
-    _match(netif, addr, NULL, &idx);
+    int idx = _match_to_idx(netif, addr, NULL);
     gnrc_netif_release(netif);
     return idx;
 }
@@ -666,6 +712,8 @@ ipv6_addr_t *gnrc_netif_ipv6_addr_best_src(gnrc_netif_t *netif,
     BITFIELD(candidate_set, GNRC_NETIF_IPV6_ADDRS_NUMOF);
 
     assert((netif != NULL) && (dst != NULL));
+    DEBUG("gnrc_netif: get best source address for %s\n",
+          ipv6_addr_to_str(addr_str, dst, sizeof(addr_str)));
     memset(candidate_set, 0, sizeof(candidate_set));
     gnrc_netif_acquire(netif);
     int first_candidate = _create_candidate_set(netif, dst, ll_only,
@@ -704,9 +752,8 @@ gnrc_netif_t *gnrc_netif_get_by_prefix(const ipv6_addr_t *prefix)
 
     while ((netif = gnrc_netif_iter(netif))) {
         unsigned match;
-        int idx;
 
-        if (((match = _match(netif, prefix, NULL, &idx)) > 0) &&
+        if (((match = _match_to_len(netif, prefix)) > 0) &&
             (match > best_match)) {
             best_match = match;
             best_netif = netif;
@@ -769,100 +816,52 @@ int gnrc_netif_ipv6_group_idx(gnrc_netif_t *netif, const ipv6_addr_t *addr)
     return idx;
 }
 
-#if defined(MODULE_NETDEV_IEEE802154) || defined(MODULE_CC110X) || \
-    defined(MODULE_NRFMIN) || defined(MODULE_XBEE)
-static void _create_iid_from_short(const gnrc_netif_t *netif, eui64_t *eui64)
-{
-    const unsigned offset = sizeof(eui64_t) - netif->l2addr_len;
-
-    assert(netif->l2addr_len <= 3);
-    memset(eui64->uint8, 0, sizeof(eui64->uint8));
-    eui64->uint8[3] = 0xff;
-    eui64->uint8[4] = 0xfe;
-    memcpy(&eui64->uint8[offset], netif->l2addr, netif->l2addr_len);
-}
-#endif /* defined(MODULE_NETDEV_IEEE802154) || defined(MODULE_CC110X) ||
-        * defined(MODULE_NRFMIN) || defined(MODULE_XBEE) */
-
-int gnrc_netif_ipv6_get_iid(gnrc_netif_t *netif, eui64_t *eui64)
-{
-#if GNRC_NETIF_L2ADDR_MAXLEN > 0
-    if (netif->flags & GNRC_NETIF_FLAGS_HAS_L2ADDR) {
-        switch (netif->device_type) {
-#ifdef MODULE_NETDEV_ETH
-            case NETDEV_TYPE_ETHERNET:
-                assert(netif->l2addr_len == ETHERNET_ADDR_LEN);
-                eui64->uint8[0] = netif->l2addr[0] ^ 0x02;
-                eui64->uint8[1] = netif->l2addr[1];
-                eui64->uint8[2] = netif->l2addr[2];
-                eui64->uint8[3] = 0xff;
-                eui64->uint8[4] = 0xfe;
-                eui64->uint8[5] = netif->l2addr[3];
-                eui64->uint8[6] = netif->l2addr[4];
-                eui64->uint8[7] = netif->l2addr[5];
-                return 0;
-#endif
-#if defined(MODULE_NETDEV_IEEE802154) || defined(MODULE_XBEE)
-            case NETDEV_TYPE_IEEE802154:
-                switch (netif->l2addr_len) {
-                    case IEEE802154_SHORT_ADDRESS_LEN:
-                        _create_iid_from_short(netif, eui64);
-                        return 0;
-                    case IEEE802154_LONG_ADDRESS_LEN:
-                        memcpy(eui64, netif->l2addr, sizeof(eui64_t));
-                        eui64->uint8[0] ^= 0x02;
-                        return 0;
-                    default:
-                        /* this should not happen */
-                        assert(false);
-                        break;
-                }
-                break;
-#endif
-#ifdef MODULE_NORDIC_SOFTDEVICE_BLE
-            case NETDEV_TYPE_BLE:
-                assert(netif->l2addr_len == sizeof(eui64_t));
-                memcpy(eui64, netif->l2addr, sizeof(eui64_t));
-                eui64->uint8[0] ^= 0x02;
-                return 0;
-#endif
-#if defined(MODULE_CC110X) || defined(MODULE_NRFMIN)
-            case NETDEV_TYPE_CC110X:
-            case NETDEV_TYPE_NRFMIN:
-                _create_iid_from_short(netif, eui64);
-                return 0;
-#endif
-            default:
-                (void)eui64;
-                break;
-        }
-    }
-#endif
-    return -ENOTSUP;
-}
-
 static inline bool _addr_anycast(const gnrc_netif_t *netif, unsigned idx)
 {
     return (netif->ipv6.addrs_flags[idx] & GNRC_NETIF_IPV6_ADDRS_FLAGS_ANYCAST);
 }
 
-static int _addr_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr)
+static int _idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr, bool mcast)
 {
-    for (unsigned i = 0; i < GNRC_NETIF_IPV6_ADDRS_NUMOF; i++) {
-        if (ipv6_addr_equal(&netif->ipv6.addrs[i], addr)) {
-            return i;
+    if (!ipv6_addr_is_unspecified(addr)) {
+        const ipv6_addr_t *iplist = (mcast) ? netif->ipv6.groups : netif->ipv6.addrs;
+        unsigned ipmax = (mcast) ? GNRC_NETIF_IPV6_GROUPS_NUMOF : GNRC_NETIF_IPV6_ADDRS_NUMOF;
+        for (unsigned i = 0; i < ipmax; i++) {
+            if (ipv6_addr_equal(&iplist[i], addr)) {
+                return i;
+            }
         }
     }
     return -1;
 }
 
-static unsigned _match(const gnrc_netif_t *netif, const ipv6_addr_t *addr,
-                       const uint8_t *filter, int *idx)
+static inline int _addr_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr)
 {
-    unsigned best_match = 0;
+    return _idx(netif, addr, false);
+}
 
-    assert(idx != NULL);
-    *idx = -1;
+static inline int _group_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr)
+{
+    return _idx(netif, addr, true);
+}
+
+static unsigned _match_to_len(const gnrc_netif_t *netif,
+                              const ipv6_addr_t *addr)
+{
+    assert((netif != NULL) && (addr != NULL));
+
+    int n = _match_to_idx(netif, addr, NULL);
+    return (n >= 0) ? ipv6_addr_match_prefix(&(netif->ipv6.addrs[n]), addr) : 0;
+}
+
+static int _match_to_idx(const gnrc_netif_t *netif,
+                         const ipv6_addr_t *addr,
+                         const uint8_t *filter)
+{
+    assert((netif != NULL) && (addr != NULL));
+
+    int idx = -1;
+    unsigned best_match = 0;
     for (int i = 0; i < GNRC_NETIF_IPV6_ADDRS_NUMOF; i++) {
         unsigned match;
 
@@ -874,16 +873,14 @@ static unsigned _match(const gnrc_netif_t *netif, const ipv6_addr_t *addr,
         }
         match = ipv6_addr_match_prefix(&(netif->ipv6.addrs[i]), addr);
         if (((match > 64U) || !ipv6_addr_is_link_local(&(netif->ipv6.addrs[i]))) &&
-            (match > best_match)) {
-            if (idx != NULL) {
-                *idx = i;
-            }
+            (match >= best_match)) {
+            idx = i;
             best_match = match;
         }
     }
-    if (*idx >= 0) {
+    if (idx != -1) {
         DEBUG("gnrc_netif: Found %s on interface %" PRIkernel_pid " matching ",
-              ipv6_addr_to_str(addr_str, &netif->ipv6.addrs[*idx],
+              ipv6_addr_to_str(addr_str, &netif->ipv6.addrs[idx],
                                sizeof(addr_str)),
               netif->pid);
         DEBUG("%s by %u bits (used as source address = %s)\n",
@@ -898,7 +895,7 @@ static unsigned _match(const gnrc_netif_t *netif, const ipv6_addr_t *addr,
               ipv6_addr_to_str(addr_str, addr, sizeof(addr_str)),
               (filter != NULL) ? "true" : "false");
     }
-    return best_match;
+    return idx;
 }
 
 static uint8_t _get_scope(const ipv6_addr_t *addr)
@@ -944,7 +941,7 @@ static int _create_candidate_set(const gnrc_netif_t *netif,
 {
     int res = -1;
 
-    DEBUG("gathering candidates\n");
+    DEBUG("gathering source address candidates\n");
     /* currently this implementation supports only addresses as source address
      * candidates assigned to this interface. Thus we assume all addresses to be
      * on interface @p netif */
@@ -958,8 +955,7 @@ static int _create_candidate_set(const gnrc_netif_t *netif,
          *  be included in a candidate set."
          */
         if ((netif->ipv6.addrs_flags[i] == 0) ||
-            (gnrc_netif_ipv6_addr_get_state(netif, i) ==
-             GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_TENTATIVE)) {
+            gnrc_netif_ipv6_addr_dad_trans(netif, i)) {
             continue;
         }
         /* Check if we only want link local addresses */
@@ -1090,19 +1086,8 @@ static ipv6_addr_t *_src_addr_selection(gnrc_netif_t *netif,
         }
     }
     /* otherwise apply rule 8: Use longest matching prefix. */
-    int res;
-    _match(netif, dst, candidate_set, &res);
-    return (res < 0) ? NULL : &netif->ipv6.addrs[res];
-}
-
-static int _group_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr)
-{
-    for (unsigned i = 0; i < GNRC_NETIF_IPV6_GROUPS_NUMOF; i++) {
-        if (ipv6_addr_equal(&netif->ipv6.groups[i], addr)) {
-            return i;
-        }
-    }
-    return -1;
+    int idx = _match_to_idx(netif, dst, candidate_set);
+    return (idx < 0) ? NULL : &netif->ipv6.addrs[idx];
 }
 #endif  /* MODULE_GNRC_IPV6 */
 
@@ -1110,10 +1095,14 @@ static int _group_idx(const gnrc_netif_t *netif, const ipv6_addr_t *addr)
 bool gnrc_netif_is_6ln(const gnrc_netif_t *netif)
 {
     switch (netif->device_type) {
+#ifdef MODULE_GNRC_SIXLOENC
+        case NETDEV_TYPE_ETHERNET:
+#endif
         case NETDEV_TYPE_IEEE802154:
         case NETDEV_TYPE_CC110X:
         case NETDEV_TYPE_BLE:
         case NETDEV_TYPE_NRFMIN:
+        case NETDEV_TYPE_ESP_NOW:
             return true;
         default:
             return false;
@@ -1125,31 +1114,17 @@ static void _update_l2addr_from_dev(gnrc_netif_t *netif)
 {
     netdev_t *dev = netif->dev;
     int res;
-    netopt_t opt = NETOPT_ADDRESS;
+    netopt_t opt = gnrc_netif_get_l2addr_opt(netif);
 
-    switch (netif->device_type) {
-#if defined(MODULE_NETDEV_IEEE802154) || defined(MODULE_XBEE) \
-    || defined(MODULE_NORDIC_SOFTDEVICE_BLE)
-        case NETDEV_TYPE_BLE:
-        case NETDEV_TYPE_IEEE802154: {
-                uint16_t tmp;
-
-                res = dev->driver->get(dev, NETOPT_SRC_LEN, &tmp, sizeof(tmp));
-                assert(res == sizeof(tmp));
-                netif->l2addr_len = (uint8_t)tmp;
-                if (tmp == IEEE802154_LONG_ADDRESS_LEN) {
-                    opt = NETOPT_ADDRESS_LONG;
-                }
-            }
-            break;
-#endif
-        default:
-            break;
-    }
     res = dev->driver->get(dev, opt, netif->l2addr,
                            sizeof(netif->l2addr));
     if (res != -ENOTSUP) {
         netif->flags |= GNRC_NETIF_FLAGS_HAS_L2ADDR;
+    }
+    else {
+        /* If no address is provided but still an address length given above,
+         * we are in an invalid state */
+        assert(netif->l2addr_len == 0);
     }
     if (res > 0) {
         netif->l2addr_len = res;
@@ -1166,55 +1141,130 @@ static void _init_from_device(gnrc_netif_t *netif)
     (void)res;
     assert(res == sizeof(tmp));
     netif->device_type = (uint8_t)tmp;
-    switch (netif->device_type) {
-#if defined(MODULE_NETDEV_IEEE802154) || defined(MODULE_NRFMIN) || defined(MODULE_XBEE)
-        case NETDEV_TYPE_IEEE802154:
-        case NETDEV_TYPE_NRFMIN:
-#ifdef MODULE_GNRC_SIXLOWPAN_IPHC
-            netif->flags |= GNRC_NETIF_FLAGS_6LO_HC;
-#endif
-#ifdef MODULE_GNRC_IPV6
-            res = dev->driver->get(dev, NETOPT_MAX_PACKET_SIZE, &tmp, sizeof(tmp));
-            assert(res == sizeof(tmp));
-#ifdef MODULE_GNRC_SIXLOWPAN
-            netif->ipv6.mtu = IPV6_MIN_MTU;
-            netif->sixlo.max_frag_size = tmp;
-#else
-            netif->ipv6.mtu = tmp;
-#endif
-#endif
-            break;
-#endif  /* MODULE_NETDEV_IEEE802154 */
-#ifdef MODULE_NETDEV_ETH
-        case NETDEV_TYPE_ETHERNET:
-#ifdef MODULE_GNRC_IPV6
-            netif->ipv6.mtu = ETHERNET_DATA_LEN;
-#endif
-            break;
-#endif
-#ifdef MODULE_NORDIC_SOFTDEVICE_BLE
-        case NETDEV_TYPE_BLE:
-            netif->ipv6.mtu = IPV6_MIN_MTU;
-#ifdef MODULE_GNRC_SIXLOWPAN_IPHC
-            netif->flags |= GNRC_NETIF_FLAGS_6LO_HC;
-#endif
-            break;
-#endif
-        default:
-#ifdef MODULE_GNRC_IPV6
-            res = dev->driver->get(dev, NETOPT_MAX_PACKET_SIZE, &tmp, sizeof(tmp));
-            if (res < 0) {
-                /* assume maximum possible transition unit */
-                netif->ipv6.mtu = UINT16_MAX;
-            }
-            else {
-                netif->ipv6.mtu = tmp;
-            }
-#endif
-            break;
-    }
+    gnrc_netif_ipv6_init_mtu(netif);
     _update_l2addr_from_dev(netif);
 }
+
+static void _configure_netdev(netdev_t *dev)
+{
+    /* Enable RX- and TX-complete interrupts */
+    static const netopt_enable_t enable = NETOPT_ENABLE;
+    int res = dev->driver->set(dev, NETOPT_RX_END_IRQ, &enable, sizeof(enable));
+    if (res < 0) {
+        DEBUG("gnrc_netif: enable NETOPT_RX_END_IRQ failed: %d\n", res);
+    }
+#ifdef MODULE_NETSTATS_L2
+    res = dev->driver->set(dev, NETOPT_TX_END_IRQ, &enable, sizeof(enable));
+    if (res < 0) {
+        DEBUG("gnrc_netif: enable NETOPT_TX_END_IRQ failed: %d\n", res);
+    }
+#endif
+}
+
+#ifdef DEVELHELP
+/* checks if a device supports all required options and functions */
+static void _test_options(gnrc_netif_t *netif)
+{
+    uint8_t dummy_addr[GNRC_NETIF_L2ADDR_MAXLEN] = { 0 };
+    ndp_opt_t dummy_opt = { .len = 1U };
+    uint64_t tmp64 = 0ULL;
+
+    (void)dummy_addr;
+    (void)dummy_opt;
+    (void)tmp64;
+#if (GNRC_NETIF_L2ADDR_MAXLEN > 0)
+    /* check if address was set in _update_l2addr_from_dev()
+     * (NETOPT_DEVICE_TYPE already tested in _configure_netdev()) and
+     * if MTU and max. fragment size was set properly by
+     * gnrc_netif_ipv6_init_mtu()
+     * all checked types below have link-layer addresses so we don't need to
+     * check `GNRC_NETIF_FLAGS_HAS_L2ADDR` */
+    switch (netif->device_type) {
+#ifdef TEST_SUITES
+        case NETDEV_TYPE_TEST:
+            /* make no assumptions about test devices */
+            break;
+#endif
+        case NETDEV_TYPE_BLE:
+        case NETDEV_TYPE_ETHERNET:
+        case NETDEV_TYPE_ESP_NOW:
+            assert(netif->flags & GNRC_NETIF_FLAGS_HAS_L2ADDR);
+            assert(ETHERNET_ADDR_LEN == netif->l2addr_len);
+#ifdef MODULE_GNRC_IPV6
+            switch (netif->device_type) {
+                case NETDEV_TYPE_BLE:
+                    assert(netif->ipv6.mtu == IPV6_MIN_MTU);
+                    break;
+                case NETDEV_TYPE_ETHERNET:
+                    assert(netif->ipv6.mtu == ETHERNET_DATA_LEN);
+                    break;
+                case NETDEV_TYPE_ESP_NOW:
+                    assert(netif->ipv6.mtu <= ETHERNET_DATA_LEN);
+            }
+#endif  /* MODULE GNRC_IPV6 */
+            break;
+        case NETDEV_TYPE_IEEE802154:
+        case NETDEV_TYPE_NRFMIN: {
+            gnrc_nettype_t tmp;
+
+            /* in case assert() evaluates to NOP */
+            (void)tmp;
+            assert(netif->flags & GNRC_NETIF_FLAGS_HAS_L2ADDR);
+            assert((IEEE802154_SHORT_ADDRESS_LEN == netif->l2addr_len) ||
+                   (IEEE802154_LONG_ADDRESS_LEN == netif->l2addr_len));
+#ifdef MODULE_GNRC_IPV6
+#ifdef MODULE_GNRC_SIXLOWPAN
+            assert(netif->ipv6.mtu == IPV6_MIN_MTU);
+            assert(netif->sixlo.max_frag_size > 0);
+            assert(-ENOTSUP != netif->dev->driver->get(netif->dev, NETOPT_PROTO,
+                                                       &tmp, sizeof(tmp)));
+#else   /* MODULE_GNRC_SIXLOWPAN */
+            assert(netif->ipv6.mtu < UINT16_MAX);
+#endif  /* MODULE_GNRC_SIXLOWPAN */
+#endif  /* MODULE_GNRC_IPV6 */
+#ifdef MODULE_GNRC_SIXLOWPAN_ND
+            assert((netif->device_type != NETDEV_TYPE_IEEE802154) ||
+                   (-ENOTSUP != netif->dev->driver->get(netif->dev,
+                                                        NETOPT_ADDRESS_LONG,
+                                                        &dummy_addr,
+                                                        sizeof(dummy_addr))));
+#endif  /* MODULE_GNRC_SIXLOWPAN_ND */
+            break;
+        }
+        case NETDEV_TYPE_CC110X:
+            assert(netif->flags & GNRC_NETIF_FLAGS_HAS_L2ADDR);
+            assert(1U == netif->l2addr_len);
+#ifdef MODULE_GNRC_IPV6
+            assert(netif->ipv6.mtu < UINT16_MAX);
+#endif  /* MODULE_GNRC_IPV6 */
+            break;
+        case NETDEV_TYPE_LORA: /* LoRa doesn't provide L2 ADDR */
+        case NETDEV_TYPE_SLIP:
+            assert(!(netif->flags & GNRC_NETIF_FLAGS_HAS_L2ADDR));
+            assert(0U == netif->l2addr_len);
+            /* don't check MTU here for now since I'm not sure the current
+             * one is correct ^^" "*/
+            break;
+        default:
+            /* device type not supported yet, please amend case above when
+             * porting new device type */
+            assert(false);
+    }
+    /* These functions only apply to network devices having link-layers */
+    if (netif->flags & GNRC_NETIF_FLAGS_HAS_L2ADDR) {
+#ifdef MODULE_GNRC_IPV6
+        assert(-ENOTSUP != gnrc_netif_ipv6_get_iid(netif, (eui64_t *)&tmp64));
+        assert(-ENOTSUP != gnrc_netif_ndp_addr_len_from_l2ao(netif,
+                                                             &dummy_opt));
+#endif  /* MODULE_GNRC_IPV6 */
+#if GNRC_IPV6_NIB_CONF_6LN
+        assert(-ENOTSUP != gnrc_netif_ipv6_iid_to_addr(netif, (eui64_t *)&tmp64,
+                                                       dummy_addr));
+#endif  /* GNRC_IPV6_NIB_CONF_6LN */
+    }
+#endif /* (GNRC_NETIF_L2ADDR_MAXLEN > 0) */
+}
+#endif /* DEVELHELP */
 
 static void *_gnrc_netif_thread(void *args)
 {
@@ -1223,7 +1273,7 @@ static void *_gnrc_netif_thread(void *args)
     netdev_t *dev;
     int res;
     msg_t reply = { .type = GNRC_NETAPI_MSG_TYPE_ACK };
-    msg_t msg, msg_queue[_NETIF_NETAPI_MSG_QUEUE_SIZE];
+    msg_t msg, msg_queue[GNRC_NETIF_MSG_QUEUE_SIZE];
 
     DEBUG("gnrc_netif: starting thread %i\n", sched_active_pid);
     netif = args;
@@ -1231,13 +1281,27 @@ static void *_gnrc_netif_thread(void *args)
     dev = netif->dev;
     netif->pid = sched_active_pid;
     /* setup the link-layer's message queue */
-    msg_init_queue(msg_queue, _NETIF_NETAPI_MSG_QUEUE_SIZE);
+    msg_init_queue(msg_queue, GNRC_NETIF_MSG_QUEUE_SIZE);
     /* register the event callback with the device driver */
     dev->event_callback = _event_cb;
     dev->context = netif;
     /* initialize low-level driver */
-    dev->driver->init(dev);
+    res = dev->driver->init(dev);
+    if (res < 0) {
+        LOG_ERROR("gnrc_netif: netdev init failed: %d\n", res);
+        /* unregister this netif instance */
+        netif->ops = NULL;
+        netif->pid = KERNEL_PID_UNDEF;
+        netif->dev = NULL;
+        dev->event_callback = NULL;
+        dev->context = NULL;
+        return NULL;
+    }
+    _configure_netdev(dev);
     _init_from_device(netif);
+#ifdef DEVELHELP
+    _test_options(netif);
+#endif
     netif->cur_hl = GNRC_NETIF_DEFAULT_HL;
 #ifdef MODULE_GNRC_IPV6_NIB
     gnrc_ipv6_nib_init_iface(netif);
@@ -1245,6 +1309,9 @@ static void *_gnrc_netif_thread(void *args)
     if (netif->ops->init) {
         netif->ops->init(netif);
     }
+#ifdef MODULE_NETSTATS_L2
+    memset(&netif->stats, 0, sizeof(netstats_t));
+#endif
     /* now let rest of GNRC use the interface */
     gnrc_netif_release(netif);
 
@@ -1264,6 +1331,11 @@ static void *_gnrc_netif_thread(void *args)
                     DEBUG("gnrc_netif: error sending packet %p (code: %u)\n",
                           msg.content.ptr, res);
                 }
+#ifdef MODULE_NETSTATS_L2
+                else {
+                    netif->stats.tx_bytes += res;
+                }
+#endif
                 break;
             case GNRC_NETAPI_MSG_TYPE_SET:
                 opt = msg.content.ptr;
@@ -1336,25 +1408,24 @@ static void _event_cb(netdev_t *dev, netdev_event_t event)
     }
     else {
         DEBUG("gnrc_netif: event triggered -> %i\n", event);
+        gnrc_pktsnip_t *pkt = NULL;
         switch (event) {
-            case NETDEV_EVENT_RX_COMPLETE: {
-                    gnrc_pktsnip_t *pkt = netif->ops->recv(netif);
-
-                    if (pkt) {
-                        _pass_on_packet(pkt);
-                    }
+            case NETDEV_EVENT_RX_COMPLETE:
+                pkt = netif->ops->recv(netif);
+                if (pkt) {
+                    _pass_on_packet(pkt);
                 }
                 break;
 #ifdef MODULE_NETSTATS_L2
             case NETDEV_EVENT_TX_MEDIUM_BUSY:
                 /* we are the only ones supposed to touch this variable,
                  * so no acquire necessary */
-                dev->stats.tx_failed++;
+                netif->stats.tx_failed++;
                 break;
             case NETDEV_EVENT_TX_COMPLETE:
                 /* we are the only ones supposed to touch this variable,
                  * so no acquire necessary */
-                dev->stats.tx_success++;
+                netif->stats.tx_success++;
                 break;
 #endif
             default:

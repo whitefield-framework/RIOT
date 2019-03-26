@@ -1,3 +1,6 @@
+[![Nightly CI status master][master-ci-badge]][master-ci-link]
+[![IRC][irc-badge]][irc-link]
+
                           ZZZZZZ
                         ZZZZZZZZZZZZ
                       ZZZZZZZZZZZZZZZZ
@@ -27,7 +30,7 @@
 The friendly Operating System for IoT!
 
 RIOT is a real-time multi-threading operating system that supports a range of
-devices that are typically found in the Internet of Things (IoT): 
+devices that are typically found in the Internet of Things (IoT):
 8-bit, 16-bit and 32-bit microcontrollers.
 
 RIOT is based on the following design principles: energy-efficiency, real-time
@@ -50,7 +53,7 @@ but not limited to:
 * a preemptive, tickless scheduler with priorities
 * flexible memory management
 * high resolution, long-term timers
-* support 100+ boards based on AVR, MSP430, MIPS, ARM7 and ARM Cortex-M
+* support 100+ boards based on AVR, MSP430, ESP8266, MIPS, ARM7 and ARM Cortex-M
 * the native port allows to run RIOT as-is on Linux, BSD, and MacOS. Multiple
   instances of RIOT running on a single machine can also be interconnected via
   a simple virtual Ethernet bridge
@@ -60,42 +63,50 @@ but not limited to:
 * RPL (storing mode, P2P mode)
 * CoAP
 * CCN-Lite
+* Sigfox
+* LoRaWAN
 
 
 ## GETTING STARTED
-* You want to start the RIOT? Just follow our [quickstart guide](http://doc.riot-os.org/index.html#the-quickest-start) or try this [tutorial](https://github.com/RIOT-OS/Tutorials/blob/master/README.md). For specific toolchain installation, follow instructions in the [getting started](http://doc.riot-os.org/getting-started.html) page.
+* You want to start the RIOT? Just follow our
+[quickstart guide](https://doc.riot-os.org/index.html#the-quickest-start) or
+try this
+[tutorial](https://github.com/RIOT-OS/Tutorials/blob/master/README.md).
+For specific toolchain installation, follow instructions in the
+[getting started](https://doc.riot-os.org/getting-started.html) page.
 * The RIOT API itself can be built from the code using doxygen. The latest
-  version of the documentation is uploaded daily to [riot-os.org/api](http://riot-os.org/api).
+  version of the documentation is uploaded daily to
+  [riot-os.org/api](https://riot-os.org/api).
 
 ### USING THE NATIVE PORT WITH NETWORKING
 If you compile RIOT for the native cpu and include the `netdev_tap` module,
 you can specify a network interface like this: `PORT=tap0 make term`
 
 #### SETTING UP A TAP NETWORK
-There is a shellscript in `RIOT/dist/tools/tapsetup` called `tapsetup` which
+There is a shell script in `RIOT/dist/tools/tapsetup` called `tapsetup` which
 you can use to create a network of tap interfaces.
 
 *USAGE*
-To create a bridge and two (or count at your option) tap interfaces:
+
+To create a bridge and two (or `count` at your option) tap interfaces:
 
     ./dist/tools/tapsetup/tapsetup [-c [<count>]]
 
 ## CONTRIBUTE
 
-To contribute something to RIOT, please refer to the [development
-procedures](https://github.com/RIOT-OS/RIOT/wiki/Development-procedures) and
-read all notes for best practice.
+To contribute something to RIOT, please refer to our
+[contributing document](CONTRIBUTING.md).
 
 ## MAILING LISTS
 * RIOT OS kernel developers list
- * devel@riot-os.org (http://lists.riot-os.org/mailman/listinfo/devel)
+ * devel@riot-os.org (https://lists.riot-os.org/mailman/listinfo/devel)
 * RIOT OS users list
- * users@riot-os.org (http://lists.riot-os.org/mailman/listinfo/users)
+ * users@riot-os.org (https://lists.riot-os.org/mailman/listinfo/users)
 * RIOT commits
- * commits@riot-os.org (http://lists.riot-os.org/mailman/listinfo/commits)
+ * commits@riot-os.org (https://lists.riot-os.org/mailman/listinfo/commits)
 * Github notifications
  * notifications@riot-os.org
-   (http://lists.riot-os.org/mailman/listinfo/notifications)
+   (https://lists.riot-os.org/mailman/listinfo/notifications)
 
 ## LICENSE
 * Most of the code developed by the RIOT community is licensed under the GNU
@@ -108,4 +119,10 @@ All code files contain licensing information.
 
 For more information, see the RIOT website:
 
-http://www.riot-os.org
+https://www.riot-os.org
+
+
+[master-ci-badge]: https://ci.riot-os.org/RIOT-OS/RIOT/master/latest/badge.svg
+[master-ci-link]: https://ci.riot-os.org/nightlies.html#master
+[irc-badge]: https://img.shields.io/badge/IRC-join%20chat%20%E2%86%92-blue.svg
+[irc-link]: https://webchat.freenode.net?channels=%23riot-os

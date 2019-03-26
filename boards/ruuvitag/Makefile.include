@@ -2,8 +2,8 @@
 CPU_MODEL = nrf52832xxaa
 
 # for this board, we are using Segger's RTT as default terminal interface
-USEMODULE += rtt_stdio
-TERMPROG = $(RIOTBASE)/dist/tools/jlink/jlink.sh
+USEMODULE += stdio_rtt
+TERMPROG = $(RIOTTOOLS)/jlink/jlink.sh
 TERMFLAGS = term_rtt
 
 # use shared Makefile.include

@@ -7,8 +7,8 @@
  */
 
 /**
- * @defgroup    lwip_arch_cc    Compiler and processor description
- * @ingroup     lwip
+ * @defgroup    pkg_lwip_arch_cc    Compiler and processor description
+ * @ingroup     pkg_lwip
  * @brief       Describes compiler and processor to lwIP
  * @{
  *
@@ -28,6 +28,10 @@
 #include "irq.h"
 #include "byteorder.h"
 #include "mutex.h"
+
+#ifdef MODULE_LOG
+#include "log.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {

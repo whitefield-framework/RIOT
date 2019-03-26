@@ -39,11 +39,6 @@ extern "C" {
 #define CC2420_PKT_MAXLEN       (IEEE802154_FRAME_LEN_MAX)
 
 /**
- * @brief   PAN ID configuration
- */
-#define CC2420_PANID_DEFAULT    (IEEE802154_DEFAULT_PANID)
-
-/**
   * @name    Channel configuration
   * @{
   */
@@ -263,13 +258,12 @@ netopt_state_t cc2420_get_state(cc2420_t *dev);
  * @note This function ignores the PRELOADING option
  *
  * @param[in] dev           device to use for sending
- * @param[in] data          data to send (must include IEEE802.15.4 header)
- * @param[in] count         length of @p data
+ * @param[in] iolist        data to send (must include IEEE802.15.4 header)
  *
  * @return                  number of bytes that were actually send
  * @return                  0 on error
  */
-size_t cc2420_send(cc2420_t *dev, const struct iovec *data, unsigned count);
+size_t cc2420_send(cc2420_t *dev, const iolist_t *iolist);
 
 /**
  * @brief   Prepare for sending of data
@@ -278,10 +272,9 @@ size_t cc2420_send(cc2420_t *dev, const struct iovec *data, unsigned count);
  * data is possible after it was called.
  *
  * @param[in] dev           device to prepare for sending
- * @param[in] data          data to prepare (must include IEEE802.15.4 header)
- * @param[in] count         length of @p data
+ * @param[in] iolist        data to prepare (must include IEEE802.15.4 header)
  */
-size_t cc2420_tx_prepare(cc2420_t *dev, const struct iovec *data, unsigned count);
+size_t cc2420_tx_prepare(cc2420_t *dev, const iolist_t *iolist);
 
 /**
  * @brief   Trigger sending of data previously loaded into transmit buffer

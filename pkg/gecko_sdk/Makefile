@@ -1,13 +1,15 @@
 PKG_NAME=gecko_sdk
 PKG_URL=https://github.com/basilfx/RIOT-gecko-sdk
-PKG_VERSION=d6a90efb97f175101821304e6e5a1ba20eef02aa
+PKG_VERSION=50996be7377cec885954312b7d4caf61788aaa40
 PKG_LICENSE=Zlib
 
 ifneq ($(CPU),efm32)
   $(error This package can only be used with EFM32 CPUs)
 endif
 
-CFLAGS += -Wno-int-in-bool-context
+ifneq (llvm,$(TOOLCHAIN))
+  CFLAGS += -Wno-int-in-bool-context
+endif
 
 .PHONY: all
 

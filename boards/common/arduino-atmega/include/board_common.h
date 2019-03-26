@@ -37,7 +37,7 @@ extern "C" {
  * baudrate to 9600 for this board
  * @{
  */
-#define UART_STDIO_BAUDRATE (9600U)
+#define STDIO_UART_BAUDRATE (9600U)
 /** @} */
 
 /**
@@ -60,30 +60,18 @@ extern "C" {
 /** @} */
 
 /**
- * @brief   Context swap defines
- *
- * Setup to use PC5 which is pin change interrupt 13 (PCINT13)
- * This emulates a software triggered interrupt
+ * @name    Usage of LED to turn on when a kernel panic occurs.
+ * @{
  */
-#ifdef CPU_ATMEGA328P
-#define AVR_CONTEXT_SWAP_INIT do { \
-            DDRD |= (1 << PD7); \
-            PCICR |= (1 << PCIE2); \
-            PCMSK2 |= (1 << PCINT23); \
-} while (0)
-#define AVR_CONTEXT_SWAP_INTERRUPT_VECT  PCINT2_vect
-#define AVR_CONTEXT_SWAP_TRIGGER   PORTD ^= (1 << PD7)
-#endif
+#define LED_PANIC           LED0_ON
+/** @} */
 
-#ifdef CPU_ATMEGA2560
-#define AVR_CONTEXT_SWAP_INIT do { \
-    DDRJ |= (1 << PJ6); \
-    PCICR |= (1 << PCIE1); \
-    PCMSK1 |= (1 << PCINT15); \
-} while (0)
-#define AVR_CONTEXT_SWAP_INTERRUPT_VECT  PCINT1_vect
-#define AVR_CONTEXT_SWAP_TRIGGER   PORTJ ^= (1 << PJ6)
-#endif
+/**
+ * @name CPU clock scale for arduino boards
+ *
+ */
+#define CPU_ATMEGA_CLK_SCALE_INIT    CPU_ATMEGA_CLK_SCALE_DIV1
+/** @} */
 
 /**
  * @name    xtimer configuration values
@@ -92,6 +80,18 @@ extern "C" {
 #define XTIMER_WIDTH                (16)
 #define XTIMER_HZ                   (250000UL)
 #define XTIMER_BACKOFF              (40)
+/** @} */
+
+/**
+ * @name    Configuration parameters for the W5100 driver
+ * @{
+ */
+#ifndef W5100_PARAM_CS
+#define W5100_PARAM_CS          (ARDUINO_PIN_10)
+#endif
+#ifndef W5100_PARAM_EVT
+#define W5100_PARAM_EVT         (ARDUINO_PIN_2)
+#endif
 /** @} */
 
 /**

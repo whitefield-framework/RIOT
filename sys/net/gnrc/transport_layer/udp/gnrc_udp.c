@@ -27,6 +27,7 @@
 #include "net/ipv6/hdr.h"
 #include "net/gnrc/udp.h"
 #include "net/gnrc.h"
+#include "net/gnrc/icmpv6/error.h"
 #include "net/inet_csum.h"
 
 
@@ -87,7 +88,7 @@ static uint16_t _calc_csum(gnrc_pktsnip_t *hdr, gnrc_pktsnip_t *pseudo_hdr,
     }
     /* return inverted results */
     if (csum == 0xFFFF) {
-        /* https://tools.ietf.org/html/rfc2460#section-8.1
+        /* https://tools.ietf.org/html/rfc8200#section-8.1
          * bullet 4
          * "if that computation yields a result of zero, it must be changed
          * to hex FFFF for placement in the UDP header."
@@ -137,7 +138,7 @@ static void _receive(gnrc_pktsnip_t *pkt)
 
     /* validate checksum */
     if (byteorder_ntohs(hdr->checksum) == 0) {
-        /* RFC 2460 Section 8.1
+        /* RFC 8200 Section 8.1
          * "IPv6 receivers must discard UDP packets containing a zero checksum,
          * and should log the error."
          */
@@ -157,6 +158,8 @@ static void _receive(gnrc_pktsnip_t *pkt)
     /* send payload to receivers */
     if (!gnrc_netapi_dispatch_receive(GNRC_NETTYPE_UDP, port, pkt)) {
         DEBUG("udp: unable to forward packet as no one is interested in it\n");
+        /* TODO determine if IPv6 packet, when IPv4 is implemented */
+        gnrc_icmpv6_error_dst_unr_send(ICMPV6_ERROR_DST_UNR_PORT, pkt);
         gnrc_pktbuf_release(pkt);
     }
 }
@@ -280,6 +283,8 @@ int gnrc_udp_calc_csum(gnrc_pktsnip_t *hdr, gnrc_pktsnip_t *pseudo_hdr)
 gnrc_pktsnip_t *gnrc_udp_hdr_build(gnrc_pktsnip_t *payload, uint16_t src,
                                    uint16_t dst)
 {
+    assert((src > 0) && (dst > 0));
+
     gnrc_pktsnip_t *res;
     udp_hdr_t *hdr;
 

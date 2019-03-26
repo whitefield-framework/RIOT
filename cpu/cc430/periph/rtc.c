@@ -8,7 +8,7 @@
  */
 
 /**
- * @ingroup     cc430
+ * @ingroup     cpu_cc430
  * @ingroup     drivers_periph_rtc
  * @{
  *
@@ -60,7 +60,7 @@ int rtc_set_time(struct tm *localt)
     }
 
     /* copy time to be set */
-    memcpy(&time_to_set, localt, sizeof(struct tm));
+    time_to_set = *localt;
     set_time = 1;
     return 0;
 }

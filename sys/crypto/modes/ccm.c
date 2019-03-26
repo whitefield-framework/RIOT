@@ -7,7 +7,7 @@
  */
 
 /**
- * @ingroup     sys_crypto_modes
+ * @ingroup     sys_crypto
  * @{
  *
  * @file
@@ -34,8 +34,8 @@ static inline int min(int a, int b)
     }
 }
 
-int ccm_compute_cbc_mac(cipher_t* cipher, uint8_t iv[16],
-                        uint8_t* input, size_t length, uint8_t* mac)
+int ccm_compute_cbc_mac(cipher_t* cipher, const uint8_t iv[16],
+                        const uint8_t* input, size_t length, uint8_t* mac)
 {
     uint8_t offset, block_size, mac_enc[16] = {0};
 
@@ -64,7 +64,7 @@ int ccm_compute_cbc_mac(cipher_t* cipher, uint8_t iv[16],
 
 
 int ccm_create_mac_iv(cipher_t* cipher, uint8_t auth_data_len, uint8_t M,
-                      uint8_t L, uint8_t* nonce, uint8_t nonce_len,
+                      uint8_t L, const uint8_t* nonce, uint8_t nonce_len,
                       size_t plaintext_len, uint8_t X1[16])
 {
     uint8_t M_, L_;
@@ -99,7 +99,7 @@ int ccm_create_mac_iv(cipher_t* cipher, uint8_t auth_data_len, uint8_t M,
     return 0;
 }
 
-int ccm_compute_adata_mac(cipher_t* cipher, uint8_t* auth_data,
+int ccm_compute_adata_mac(cipher_t* cipher, const uint8_t* auth_data,
                           uint32_t auth_data_len, uint8_t X1[16])
 {
     if (auth_data_len > 0) {
@@ -108,13 +108,17 @@ int ccm_compute_adata_mac(cipher_t* cipher, uint8_t* auth_data,
         /* 16 octet block size + max. 10 len encoding  */
         uint8_t auth_data_encoded[26], len_encoding = 0;
 
-        if ( auth_data_len < (((uint32_t) 2) << 16)) {       /* length (0x0001 ... 0xFEFF)  */
+        /* If 0 < l(a) < (2^16 - 2^8), then the length field is encoded as two
+         * octets. (RFC3610 page 2)
+         */
+        if (auth_data_len <= 0xFEFF) {
+            /* length (0x0001 ... 0xFEFF)  */
             len_encoding = 2;
 
             auth_data_encoded[1] = auth_data_len & 0xFF;
             auth_data_encoded[0] = (auth_data_len >> 8) & 0xFF;
         } else {
-            DEBUG("UNSUPPORTED Adata length\n");
+            DEBUG("UNSUPPORTED Adata length: %" PRIu32 "\n", auth_data_len);
             return -1;
         }
 
@@ -129,14 +133,25 @@ int ccm_compute_adata_mac(cipher_t* cipher, uint8_t* auth_data,
 }
 
 
-int cipher_encrypt_ccm(cipher_t* cipher, uint8_t* auth_data, uint32_t auth_data_len,
+/* Check if 'value' can be stored in 'num_bytes' */
+static inline int _fits_in_nbytes(size_t value, uint8_t num_bytes)
+{
+    /* Not allowed to shift more or equal than left operand width
+     * So we shift by maximum num bits of size_t -1 and compare to 1
+     */
+    unsigned shift = (8 * min(sizeof(size_t), num_bytes)) - 1;
+    return (value >> shift) <= 1;
+}
+
+
+int cipher_encrypt_ccm(cipher_t* cipher,
+                       const uint8_t* auth_data, uint32_t auth_data_len,
                        uint8_t mac_length, uint8_t length_encoding,
-                       uint8_t* nonce, size_t nonce_len,
-                       uint8_t* input, size_t input_len,
+                       const uint8_t* nonce, size_t nonce_len,
+                       const uint8_t* input, size_t input_len,
                        uint8_t* output)
 {
     int len = -1;
-    uint32_t length_max;
     uint8_t nonce_counter[16] = {0}, mac_iv[16] = {0}, mac[16] = {0},
                                 stream_block[16] = {0}, zero_block[16] = {0}, block_size;
 
@@ -144,9 +159,8 @@ int cipher_encrypt_ccm(cipher_t* cipher, uint8_t* auth_data, uint32_t auth_data_
         return CCM_ERR_INVALID_MAC_LENGTH;
     }
 
-    length_max = 2 << (8 * length_encoding);
     if (length_encoding < 2 || length_encoding > 8 ||
-            input_len - auth_data_len > length_max) {
+            !_fits_in_nbytes(input_len, length_encoding)) {
         return CCM_ERR_INVALID_LENGTH_ENCODING;
     }
 
@@ -158,7 +172,10 @@ int cipher_encrypt_ccm(cipher_t* cipher, uint8_t* auth_data, uint32_t auth_data_
     }
 
     /* MAC calulation (T) with additional data and plaintext */
-    ccm_compute_adata_mac(cipher, auth_data, auth_data_len, mac_iv);
+    len = ccm_compute_adata_mac(cipher, auth_data, auth_data_len, mac_iv);
+    if (len < 0) {
+        return len;
+    }
     len = ccm_compute_cbc_mac(cipher, mac_iv, input, input_len, mac);
     if (len < 0) {
         return len;
@@ -191,13 +208,14 @@ int cipher_encrypt_ccm(cipher_t* cipher, uint8_t* auth_data, uint32_t auth_data_
 }
 
 
-int cipher_decrypt_ccm(cipher_t* cipher, uint8_t* auth_data,
-                       uint32_t auth_data_len, uint8_t mac_length,
-                       uint8_t length_encoding, uint8_t* nonce, size_t nonce_len,
-                       uint8_t* input, size_t input_len, uint8_t* plain)
+int cipher_decrypt_ccm(cipher_t* cipher,
+                       const uint8_t* auth_data, uint32_t auth_data_len,
+                       uint8_t mac_length, uint8_t length_encoding,
+                       const uint8_t* nonce, size_t nonce_len,
+                       const uint8_t* input, size_t input_len,
+                       uint8_t* plain)
 {
     int len = -1;
-    uint32_t length_max;
     uint8_t nonce_counter[16] = {0}, mac_iv[16] = {0}, mac[16] = {0},
                                 mac_recv[16] = {0}, stream_block[16] = {0}, zero_block[16] = {0},
                                         plain_len, block_size;
@@ -206,9 +224,8 @@ int cipher_decrypt_ccm(cipher_t* cipher, uint8_t* auth_data,
         return CCM_ERR_INVALID_MAC_LENGTH;
     }
 
-    length_max = 2 << (8 * length_encoding);
     if (length_encoding < 2 || length_encoding > 8 ||
-            input_len - auth_data_len > length_max) {
+            !_fits_in_nbytes(input_len, length_encoding)) {
         return CCM_ERR_INVALID_LENGTH_ENCODING;
     }
 
@@ -238,7 +255,10 @@ int cipher_decrypt_ccm(cipher_t* cipher, uint8_t* auth_data,
     }
 
     /* MAC calulation (T) with additional data and plaintext */
-    ccm_compute_adata_mac(cipher, auth_data, auth_data_len, mac_iv);
+    len = ccm_compute_adata_mac(cipher, auth_data, auth_data_len, mac_iv);
+    if (len < 0) {
+        return len;
+    }
     len = ccm_compute_cbc_mac(cipher, mac_iv, plain, plain_len, mac);
     if (len < 0) {
         return len;

@@ -7,9 +7,7 @@
  */
 
 /**
- * @defgroup    boards_mulle Eistec Mulle
- * @ingroup     boards
- * @brief       Support for Eistec Mulle IoT boards
+ * @ingroup     boards_mulle
  * @{
  *
  * @file
@@ -37,7 +35,7 @@
 /**
  * @brief Use the UART1 for STDIO on this board
  */
-#define UART_STDIO_DEV      UART_DEV(1)
+#define STDIO_UART_DEV      UART_DEV(1)
 
 /**
  * @name    xtimer configuration
@@ -104,28 +102,28 @@ void board_init(void);
 
 /**
  * @name Define the interface to the AT86RF212B radio
- *
- * @todo Work around missing RESET pin on Mulle v0.6x
+ * @{
+ */
+
+ /** @todo Work around missing RESET pin on Mulle v0.6x
  *
  * {spi bus, spi speed, cs pin, int pin, reset pin, sleep pin}
+ * @{
  */
-#define AT86RF2XX_PARAMS_BOARD      {.spi = SPI_DEV(0), \
-                                     .spi_clk = SPI_CLK_5MHZ, \
-                                     .cs_pin = SPI_HWCS(1), \
-                                     .int_pin = GPIO_PIN(PORT_B, 9), \
-                                     .sleep_pin = GPIO_PIN(PORT_E, 6), \
-                                     .reset_pin = GPIO_PIN(PORT_C, 12)}
-
+#define AT86RF2XX_PARAM_CS             SPI_HWCS(1)
+#define AT86RF2XX_PARAM_INT            GPIO_PIN(PORT_B, 9)
+#define AT86RF2XX_PARAM_SLEEP          GPIO_PIN(PORT_E, 6)
+#define AT86RF2XX_PARAM_RESET          GPIO_PIN(PORT_C, 12)
+/** @} */
 
 /**
  * @name LIS3DH configuration
  * @{
  */
-#define LIS3DH_INT1                 GPIO_PIN(PORT_C, 18)
-#define LIS3DH_INT2                 GPIO_PIN(PORT_C, 17)
-#define LIS3DH_CS                   SPI_HWCS(0)
-#define LIS3DH_CLK                  SPI_CLK_5MHZ
-#define LIS3DH_SPI                  SPI_DEV(0)
+#define LIS3DH_PARAM_INT1           GPIO_PIN(PORT_C, 18)
+#define LIS3DH_PARAM_INT2           GPIO_PIN(PORT_C, 17)
+#define LIS3DH_PARAM_CS             SPI_HWCS(0)
+#define LIS3DH_PARAM_CLK            (SPI_CLK_5MHZ)
 /** @} */
 
 /**

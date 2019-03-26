@@ -7,9 +7,7 @@
  */
 
 /**
- * @defgroup    boards_waspmote-pro Waspmote PRO v1.2
- * @ingroup     boards
- * @brief       Support for the Waspmote PRO v1.2 board.
+ * @ingroup     boards_waspmote-pro
  * @{
  *
  * @file
@@ -33,7 +31,7 @@ extern "C" {
 * @brief   As the CPU is too slow to handle 115200 baud, we set the default
 *          baudrate to 9600 for this board
 */
-#define UART_STDIO_BAUDRATE  (9600U)
+#define STDIO_UART_BAUDRATE  (9600U)
 
 /**
  * @brief   Use the UART 0 for STDIO on this board, if the XBee socket is not
@@ -41,9 +39,9 @@ extern "C" {
  */
 #ifdef XBEE_UART
 #if XBEE_UART == 0
-#define UART_STDIO_DEV       (UART_DEV(1))
+#define STDIO_UART_DEV       (UART_DEV(1))
 #else
-#define UART_STDIO_DEV       (UART_DEV(0))
+#define STDIO_UART_DEV       (UART_DEV(0))
 #endif
 #endif
 
@@ -78,6 +76,13 @@ extern "C" {
 #define LED_RED_ON           LED0_ON
 #define LED_RED_OFF          LED0_OFF
 #define LED_RED_TOGGLE       LED0_TOGGLE
+/** @} */
+
+/**
+ * @name    Usage of LED to turn on when a kernel panic occurs.
+ * @{
+ */
+#define LED_PANIC            LED_RED_ON
 /** @} */
 
 /**
@@ -146,19 +151,11 @@ extern "C" {
 /** @} */
 
 /**
- * @brief Context swap defines
- * Setup to use PB5 which is pin change interrupt 5
- * This emulates a software triggered interrupt
- **/
-#define AVR_CONTEXT_SWAP_INIT do { \
-    DDRB |= (1 << PB5); \
-    PCICR |= (1 << PCIE0); \
-    PCMSK0 |= (1 << PCINT5); \
-} while (0)
-/** @cond INTERNAL */
-#define AVR_CONTEXT_SWAP_INTERRUPT_VECT  PCINT0_vect
-#define AVR_CONTEXT_SWAP_TRIGGER   PORTB ^= (1 << PB5)
-/** @endcond */
+ * @name CPU clock scale for waspmote-pro
+ *
+ */
+#define CPU_ATMEGA_CLK_SCALE_INIT    CPU_ATMEGA_CLK_SCALE_DIV1
+/** @} */
 
 /**
  * @name    xtimer configuration values

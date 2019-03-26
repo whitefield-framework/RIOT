@@ -7,9 +7,7 @@
  */
 
 /**
- * @defgroup    boards_ikea-tradfri IKEA TRÅDFRI modules
- * @ingroup     boards
- * @brief       Support for the IKEA TRÅDFRI modules
+ * @ingroup     boards_ikea-tradfri
  * @{
  *
  * @file
@@ -22,7 +20,6 @@
 #define BOARD_H
 
 #include "cpu.h"
-
 #include "periph_conf.h"
 #include "periph/gpio.h"
 #include "periph/spi.h"

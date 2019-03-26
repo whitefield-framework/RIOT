@@ -20,18 +20,34 @@
  * @}
  */
 
+#ifdef MODULE_PERIPH_I2C
+#include "periph/i2c.h"
+#endif
 #ifdef MODULE_PERIPH_SPI
 #include "periph/spi.h"
 #endif
 #ifdef MODULE_PERIPH_RTC
 #include "periph/rtc.h"
 #endif
+#ifdef MODULE_PERIPH_RTT
+#include "periph/rtt.h"
+#endif
 #ifdef MODULE_PERIPH_HWRNG
 #include "periph/hwrng.h"
+#endif
+#ifdef MODULE_PERIPH_USBDEV
+#include "periph/usbdev.h"
 #endif
 
 void periph_init(void)
 {
+    /* initialize configured I2C devices */
+#ifdef MODULE_PERIPH_I2C
+    for (unsigned i = 0; i < I2C_NUMOF; i++) {
+        i2c_init(I2C_DEV(i));
+    }
+#endif
+
     /* initialize configured SPI devices */
 #ifdef MODULE_PERIPH_SPI
     for (unsigned i = 0; i < SPI_NUMOF; i++) {
@@ -44,7 +60,16 @@ void periph_init(void)
     rtc_init();
 #endif
 
+    /* Initialize RTT */
+#ifdef MODULE_PERIPH_RTT
+    rtt_init();
+#endif
+
 #ifdef MODULE_PERIPH_HWRNG
     hwrng_init();
+#endif
+
+#ifdef MODULE_PERIPH_USBDEV
+    usbdev_init_lowlevel();
 #endif
 }

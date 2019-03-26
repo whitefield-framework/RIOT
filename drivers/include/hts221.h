@@ -9,7 +9,10 @@
 /**
  * @defgroup    drivers_hts221 ST HTS221 digital Humidity Sensor
  * @ingroup     drivers_sensors
+ * @ingroup     drivers_saul
  * @brief       Driver for the ST HTS221 digital Humidity Sensor
+ *
+ * This driver provides @ref drivers_saul capabilities.
  *
  * @{
  * @file
@@ -94,7 +97,7 @@ int hts221_init(hts221_t *dev, const hts221_params_t *params);
 int hts221_reboot(const hts221_t *dev);
 
 /**
- * @brief   Set device to continues measurements
+ * @brief   Set device to one shot measurement
  *
  * @param[in]  dev          device descriptor of sensor
  *
@@ -103,10 +106,10 @@ int hts221_reboot(const hts221_t *dev);
 int hts221_one_shot(const hts221_t *dev);
 
 /**
- * @brief   Set device to continues measurements
+ * @brief   Set device to continuous measurements
  *
  * @param[in]  dev          device descriptor of sensor
- * @param[in]  rate         conversion rate for continues mode
+ * @param[in]  rate         conversion rate for continuous mode
  *
  * @return                  0 on success, or error otherwise
  */

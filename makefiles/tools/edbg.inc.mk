@@ -1,8 +1,7 @@
-RIOT_EDBG = $(RIOTBASE)/dist/tools/edbg/edbg
+RIOT_EDBG = $(RIOTTOOLS)/edbg/edbg
 EDBG ?= $(RIOT_EDBG)
 FLASHER ?= $(EDBG)
-OFLAGS ?= -O binary
-HEXFILE = $(ELFFILE:.elf=.bin)
+FLASHFILE ?= $(BINFILE)
 # Use USB serial number to select device when more than one is connected
 # Use /dist/tools/usb-serial/list-ttys.sh to find out serial number.
 #   Usage:
@@ -11,7 +10,11 @@ HEXFILE = $(ELFFILE:.elf=.bin)
 ifneq (,$(DEBUG_ADAPTER_ID))
   EDBG_ARGS += --serial $(DEBUG_ADAPTER_ID)
 endif
-FFLAGS ?= $(EDBG_ARGS) -t $(EDBG_DEVICE_TYPE) -b -e -v -p -f $(HEXFILE)
+
+# Set offset according to IMAGE_OFFSET if it's defined
+EDBG_ARGS += $(if $(IMAGE_OFFSET),--offset $(IMAGE_OFFSET))
+
+FFLAGS ?= $(EDBG_ARGS) -t $(EDBG_DEVICE_TYPE) -b -v -p -f $(FLASHFILE)
 
 ifeq ($(RIOT_EDBG),$(FLASHER))
   FLASHDEPS += $(RIOT_EDBG)

@@ -8,7 +8,7 @@
  */
 
 /*
- * @ingroup     auto_init_saul
+ * @ingroup     sys_auto_init_saul
  * @{
  *
  * @file
@@ -21,6 +21,7 @@
 
 #ifdef MODULE_HTS221
 
+#include "assert.h"
 #include "log.h"
 #include "saul_reg.h"
 #include "hts221.h"

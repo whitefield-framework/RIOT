@@ -13,21 +13,27 @@
  * @file
  */
 #include <errno.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "embUnit/embUnit.h"
 #include "net/gnrc/pkt.h"
 #include "net/gnrc/nettype.h"
 
+#include "iolist.h"
+
 #include "unittests-constants.h"
 #include "tests-pkt.h"
 
-#define _INIT_ELEM(len, data, next) \
-    { 1, (next), (data), (len), GNRC_NETTYPE_UNDEF }
+#define _INIT_ELEM(len, _data, _next) \
+    { .users = 1, .next = (_next), .data = (_data), \
+      .size = (len), .type = GNRC_NETTYPE_UNDEF \
+    }
 #define _INIT_ELEM_STATIC_DATA(data, next) _INIT_ELEM(sizeof(data), data, next)
 
-#define _INIT_ELEM_STATIC_TYPE(type, next) \
-    { 1, (next), NULL, 0, (type) }
+#define _INIT_ELEM_STATIC_TYPE(_type, _next) \
+    { .users = 1, .next = (_next), .data = NULL, .size = 0, .type = (_type) }
 
 static void test_pkt_len__NULL(void)
 {
@@ -86,6 +92,32 @@ static void test_pkt_len__3_elem(void)
     TEST_ASSERT_EQUAL_INT(sizeof(TEST_STRING8) + sizeof(TEST_STRING12), gnrc_pkt_len(&snip2));
     TEST_ASSERT_EQUAL_INT(sizeof(TEST_STRING8), gnrc_pkt_len(&snip1));
 }
+
+static void test_pkt_len_upto__NULL(void)
+{
+    TEST_ASSERT_EQUAL_INT(0, gnrc_pkt_len_upto(NULL, GNRC_NETTYPE_TEST));
+}
+
+static void test_pkt_len_upto__not_in_list(void)
+{
+    gnrc_pktsnip_t snip1 = _INIT_ELEM_STATIC_DATA(TEST_STRING8, NULL);
+    gnrc_pktsnip_t snip2 = _INIT_ELEM_STATIC_DATA(TEST_STRING12, &snip1);
+    gnrc_pktsnip_t snip3 = _INIT_ELEM(sizeof("a"), "a", &snip2);
+
+    TEST_ASSERT_EQUAL_INT(sizeof(TEST_STRING8) + sizeof(TEST_STRING12) + sizeof("a"),
+                          gnrc_pkt_len_upto(&snip3, GNRC_NETTYPE_TEST));
+}
+
+static void test_pkt_len_upto__in_list(void)
+{
+    gnrc_pktsnip_t snip1 = _INIT_ELEM_STATIC_DATA(TEST_STRING8, NULL);
+    gnrc_pktsnip_t snip2 = _INIT_ELEM_STATIC_TYPE(GNRC_NETTYPE_TEST, &snip1);
+    gnrc_pktsnip_t snip3 = _INIT_ELEM(sizeof("a"), "a", &snip2);
+
+    TEST_ASSERT_EQUAL_INT(sizeof("a"),
+                          gnrc_pkt_len_upto(&snip3, GNRC_NETTYPE_TEST));
+}
+
 static void test_pkt_count__1_elem(void)
 {
     gnrc_pktsnip_t snip1 = _INIT_ELEM_STATIC_DATA(TEST_STRING8, NULL);
@@ -129,6 +161,40 @@ static void test_pktsnip_search_type(void)
     TEST_ASSERT_NULL(gnrc_pktsnip_search_type(&snip3, GNRC_NETTYPE_NUMOF));
 }
 
+static void test_pkt_equals_iolist(void)
+{
+    iolist_t iol;
+    gnrc_pktsnip_t pkt;
+
+    memset(&iol, '\0', sizeof(iol));
+    memset(&pkt, '\0', sizeof(pkt));
+
+    /* compare empty structs */
+    TEST_ASSERT_EQUAL_INT(0, memcmp(&iol, &pkt, sizeof(iol)));
+
+    /* check next pointer position */
+    iol.iol_next = (void *)0xAAAAAAAA;
+    pkt.next = (void *)0xAAAAAAAA;
+
+    TEST_ASSERT_EQUAL_INT(0, memcmp(&iol, &pkt, sizeof(iol)));
+
+    /* check data pointer position */
+    iol.iol_base = &iol;
+    pkt.data = &iol;
+
+    TEST_ASSERT_EQUAL_INT(0, memcmp(&iol, &pkt, sizeof(iol)));
+
+    /* check size position */
+    iol.iol_len = 0x12345678;
+    pkt.size = 0x12345678;
+
+    TEST_ASSERT_EQUAL_INT(0, memcmp(&iol, &pkt, sizeof(iol)));
+
+    TEST_ASSERT_EQUAL_INT(offsetof(iolist_t, iol_next), offsetof(gnrc_pktsnip_t, next));
+    TEST_ASSERT_EQUAL_INT(offsetof(iolist_t, iol_base), offsetof(gnrc_pktsnip_t, data));
+    TEST_ASSERT_EQUAL_INT(offsetof(iolist_t, iol_len), offsetof(gnrc_pktsnip_t, size));
+}
+
 Test *tests_pkt_tests(void)
 {
     EMB_UNIT_TESTFIXTURES(fixtures) {
@@ -139,10 +205,14 @@ Test *tests_pkt_tests(void)
         new_TestFixture(test_pkt_len__2_elem),
         new_TestFixture(test_pkt_len__2_elem__overflow),
         new_TestFixture(test_pkt_len__3_elem),
+        new_TestFixture(test_pkt_len_upto__NULL),
+        new_TestFixture(test_pkt_len_upto__not_in_list),
+        new_TestFixture(test_pkt_len_upto__in_list),
         new_TestFixture(test_pkt_count__1_elem),
         new_TestFixture(test_pkt_count__5_elem),
         new_TestFixture(test_pkt_count__null),
         new_TestFixture(test_pktsnip_search_type),
+        new_TestFixture(test_pkt_equals_iolist),
     };
 
     EMB_UNIT_TESTCALLER(pkt_tests, NULL, NULL, fixtures);

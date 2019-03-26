@@ -1,6 +1,7 @@
 /*
  * Copyright (C) 2015 Kaspar Schleiser <kaspar@schleiser.de>
- * Copyright (C) 2016 Eistec AB
+ *               2016 Eistec AB
+ *               2018 Josua Arndt
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -13,8 +14,11 @@
  * @{
  * @file
  * @brief   xtimer implementation
+ *
  * @author  Kaspar Schleiser <kaspar@schleiser.de>
  * @author  Joakim Nohlgård <joakim.nohlgard@eistec.se>
+ * @author  Josua Arndt <jarndt@ias.rwth-aachen.de>
+ *
  */
 #ifndef XTIMER_IMPLEMENTATION_H
 #define XTIMER_IMPLEMENTATION_H
@@ -61,7 +65,21 @@ static inline uint32_t _xtimer_lltimer_mask(uint32_t val)
  * @brief xtimer internal stuff
  * @internal
  */
+
 uint64_t _xtimer_now64(void);
+
+/**
+ * @brief Sets the timer to the appropriate timer_list or list_head.
+ *
+ * @note    The target to set the timer to has to be at least bigger then the
+ *          ticks needed to jump into the function and calculate '_xtimer_now()'.
+ *          So that 'now' did not pass the target.
+ *          This is crucial when using low CPU frequencies and/or when the
+ *          '_xtimer_now()' call needs multiple xtimer ticks to evaluate.
+ *
+ * @param[in] timer   pointer to xtimer_t which is added to the list.
+ * @param[in] target  Absolute target value in ticks.
+ */
 int _xtimer_set_absolute(xtimer_t *timer, uint32_t target);
 void _xtimer_set(xtimer_t *timer, uint32_t offset);
 void _xtimer_set64(xtimer_t *timer, uint32_t offset, uint32_t long_offset);
@@ -215,6 +233,12 @@ static inline void xtimer_set_wakeup64(xtimer_t *timer, uint64_t offset, kernel_
 static inline void xtimer_set(xtimer_t *timer, uint32_t offset)
 {
     _xtimer_set(timer, _xtimer_ticks_from_usec(offset));
+}
+
+static inline void xtimer_set64(xtimer_t *timer, uint64_t period_us)
+{
+    uint64_t ticks = _xtimer_ticks_from_usec64(period_us);
+    _xtimer_set64(timer, ticks, ticks >> 32);
 }
 
 static inline int xtimer_msg_receive_timeout(msg_t *msg, uint32_t timeout)

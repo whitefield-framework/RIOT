@@ -7,13 +7,13 @@
  */
 
 /**
- * @addtogroup     core_util
+ * @ingroup     core_util
  * @{
  *
  * @file
- * @brief          Functions to work with different byte orders.
+ * @brief       Functions to work with different byte orders.
  *
- * @author         René Kijewski <rene.kijewski@fu-berlin.de>
+ * @author      René Kijewski <rene.kijewski@fu-berlin.de>
  */
 
 #ifndef BYTEORDER_H
@@ -225,6 +225,31 @@ static inline uint32_t byteorder_swapl(uint32_t v);
 static inline uint64_t byteorder_swapll(uint64_t v);
 
 /**
+ * @brief           Read a big endian encoded unsigned integer from a buffer
+ *                  into host byte order encoded variable, 16-bit
+ *
+ * @note            This function is agnostic to the alignment of the target
+ *                  value in the given buffer
+ *
+ * @param[in] buf   position in a buffer holding the target value
+ *
+ * @return          16-bit unsigned integer in host byte order
+ */
+static inline uint16_t byteorder_bebuftohs(const uint8_t *buf);
+
+/**
+ * @brief           Write a host byte order encoded unsigned integer as big
+ *                  endian encoded value into a buffer, 16-bit
+ *
+ * @note            This function is alignment agnostic and works with any given
+ *                  memory location of the buffer
+ *
+ * @param[out] buf  target buffer, must be able to accept 2 bytes
+ * @param[in]  val  value written to the buffer, in host byte order
+ */
+static inline void byteorder_htobebufs(uint8_t *buf, uint16_t val);
+
+/**
  * @brief          Convert from host byte order to network byte order, 16 bit.
  * @see            byteorder_htons()
  * @param[in]      v   The integer to convert.
@@ -416,6 +441,17 @@ static inline uint64_t ntohll(uint64_t v)
 {
     network_uint64_t input = { v };
     return byteorder_ntohll(input);
+}
+
+static inline uint16_t byteorder_bebuftohs(const uint8_t *buf)
+{
+    return (uint16_t)((buf[0] << 8) | (buf[1] << 0));
+}
+
+static inline void byteorder_htobebufs(uint8_t *buf, uint16_t val)
+{
+    buf[0] = (uint8_t)(val >> 8);
+    buf[1] = (uint8_t)(val >> 0);
 }
 
 #ifdef __cplusplus

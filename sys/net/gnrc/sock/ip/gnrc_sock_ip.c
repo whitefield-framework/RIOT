@@ -16,6 +16,7 @@
  */
 
 #include <errno.h>
+#include <string.h>
 
 #include "byteorder.h"
 #include "net/af.h"
@@ -51,7 +52,7 @@ int sock_ip_create(sock_ip_t *sock, const sock_ip_ep_t *local,
         if (gnrc_ep_addr_any(remote)) {
             return -EINVAL;
         }
-        memcpy(&sock->remote, remote, sizeof(sock_ip_ep_t));
+        gnrc_ep_set(&sock->remote, remote, sizeof(sock_ip_ep_t));
     }
     gnrc_sock_create(&sock->reg, GNRC_NETTYPE_IPV6,
                      proto);
@@ -119,8 +120,9 @@ ssize_t sock_ip_recv(sock_ip_t *sock, void *data, size_t max_len,
         return -EPROTO;
     }
     memcpy(data, pkt->data, pkt->size);
+    res = (int)pkt->size;
     gnrc_pktbuf_release(pkt);
-    return (int)pkt->size;
+    return res;
 }
 
 ssize_t sock_ip_send(sock_ip_t *sock, const void *data, size_t len,
@@ -140,7 +142,8 @@ ssize_t sock_ip_send(sock_ip_t *sock, const void *data, size_t len,
         return -EINVAL;
     }
     if ((remote == NULL) &&
-        /* sock can't be NULL as per assertion above */
+        /* cppcheck-suppress nullPointerRedundantCheck
+         * (reason: sock can't be NULL as per the check above) */
         (sock->remote.family == AF_UNSPEC)) {
         return -ENOTCONN;
     }
@@ -165,7 +168,7 @@ ssize_t sock_ip_send(sock_ip_t *sock, const void *data, size_t len,
         memcpy(&rem, &sock->remote, sizeof(rem));
     }
     else {
-        memcpy(&rem, remote, sizeof(rem));
+        gnrc_ep_set(&rem, remote, sizeof(rem));
     }
     if ((remote != NULL) && (remote->family == AF_UNSPEC) &&
         (sock->remote.family != AF_UNSPEC)) {

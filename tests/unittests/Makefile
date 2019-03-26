@@ -7,10 +7,12 @@ BOARD_INSUFFICIENT_MEMORY := airfy-beacon \
                              arduino-mkr1000 \
                              arduino-mkrfox1200 \
                              arduino-mkrzero \
+                             arduino-nano \
                              arduino-uno \
                              arduino-zero \
                              avsextrem \
                              b-l072z-lrwan1 \
+                             blackpill \
                              bluepill \
                              calliope-mini \
                              cc2538dk \
@@ -19,44 +21,61 @@ BOARD_INSUFFICIENT_MEMORY := airfy-beacon \
                              chronos \
                              ek-lm4f120xl \
                              feather-m0 \
+                             firefly \
+                             ikea-tradfri \
                              limifrog-v1 maple-mini \
+                             lobaro-lorabox \
                              mbed_lpc1768 \
+                             mega-xplained \
                              microbit \
                              msb-430 \
                              msb-430h \
+                             msba2 \
+                             nrf51dk \
                              nrf51dongle \
                              nrf6310 \
-                             nucleo32-f031 \
-                             nucleo32-f042 \
-                             nucleo32-f303 \
-                             nucleo32-l031 \
-                             nucleo32-l432 \
-                             nucleo-f030 \
-                             nucleo-f070 \
-                             nucleo-f072 \
-                             nucleo-f091 \
-                             nucleo-f103 \
-                             nucleo-f302 \
-                             nucleo-f334 \
-                             nucleo-f410 \
-                             nucleo-l053 \
-                             nucleo-l073 \
+                             nucleo-f031k6 \
+                             nucleo-f042k6 \
+                             nucleo-f303k8 \
+                             nucleo-l031k6 \
+                             nucleo-l432kc \
+                             nucleo-f030r8 \
+                             nucleo-f070rb \
+                             nucleo-f072rb \
+                             nucleo-f091rc \
+                             nucleo-f103rb \
+                             nucleo-f302r8 \
+                             nucleo-f334r8 \
+                             nucleo-f410rb \
+                             nucleo-l053r8 \
+                             nucleo-l073rz \
+                             nucleo-l433rc \
                              nz32-sc151 \
                              opencm904 \
                              openmote \
                              openmote-cc2538 \
+                             openmote-b \
                              pba-d-01-kw2x \
                              remote-pa \
                              remote-reva \
                              remote-revb \
+                             saml10-xpro \
+                             saml11-xpro \
                              saml21-xpro \
                              samd21-xpro \
                              samr21-xpro \
+                             samr30-xpro \
                              seeeduino_arch-pro \
+                             sensebox_samd21 \
+                             slstk3401a \
+                             sltb001a \
                              slwstk6220a \
                              sodaq-autonomo \
                              sodaq-explorer \
+                             sodaq-one \
+                             sodaq-sara-aff \
                              spark-core \
+                             stk3600 \
                              stm32f0discovery \
                              stm32f3discovery \
                              teensy31 \
@@ -79,7 +98,7 @@ endif
 ARM7_BOARDS := avsextrem \
                msba2 \
                #
-DISABLE_TEST_FOR_ARM7 := tests-relic tests-cpp_%
+DISABLE_TEST_FOR_ARM7 := tests-cpp_%
 
 ARM_CORTEX_M_BOARDS := airfy-beacon \
                        arduino-due \
@@ -96,9 +115,12 @@ ARM_CORTEX_M_BOARDS := airfy-beacon \
                        ek-lm4f120xl \
                        f4vi1 \
                        feather-m0 \
+                       firefly \
                        fox \
                        frdm-k22f \
                        frdm-k64f \
+                       frdm-kw41z \
+                       ikea-tradfri \
                        iotlab-a8-m3 \
                        iotlab-m3 \
                        limifrog-v1 \
@@ -107,40 +129,43 @@ ARM_CORTEX_M_BOARDS := airfy-beacon \
                        microbit \
                        msbiot \
                        mulle \
+                       nrf51dk \
                        nrf51dongle \
                        nrf52840dk \
                        nrf52dk \
                        nrf6310 \
                        nucleo-f207zg \
-                       nucleo144-f303 \
-                       nucleo144-f412 \
-                       nucleo144-f413 \
-                       nucleo144-f429 \
-                       nucleo144-f446 \
-                       nucleo144-f722 \
-                       nucleo144-f746 \
-                       nucleo144-f767 \
-                       nucleo32-f031 \
-                       nucleo32-f042 \
-                       nucleo32-f303 \
-                       nucleo32-l031 \
-                       nucleo32-l432 \
-                       nucleo-f030 \
-                       nucleo-f070 \
-                       nucleo-f072 \
-                       nucleo-f091 \
-                       nucleo-f103 \
-                       nucleo-f302 \
-                       nucleo-f303 \
-                       nucleo-f334 \
-                       nucleo-f401 \
-                       nucleo-f410 \
-                       nucleo-f411 \
-                       nucleo-f446 \
-                       nucleo-l053 \
-                       nucleo-l073 \
-                       nucleo-l152 \
-                       nucleo-l476 \
+                       nucleo-f303ze \
+                       nucleo-f412zg \
+                       nucleo-f413zh \
+                       nucleo-f429zi \
+                       nucleo-f446ze \
+                       nucleo-f722ze \
+                       nucleo-f746zg \
+                       nucleo-f767zi \
+                       nucleo-f031k6 \
+                       nucleo-f042k6 \
+                       nucleo-f303k8 \
+                       nucleo-l031k6 \
+                       nucleo-l432kc \
+                       nucleo-f030r8 \
+                       nucleo-f070rb \
+                       nucleo-f072rb \
+                       nucleo-f091rc \
+                       nucleo-f103rb \
+                       nucleo-f302r8 \
+                       nucleo-f303re \
+                       nucleo-f334r8 \
+                       nucleo-f401re \
+                       nucleo-f410rb \
+                       nucleo-f411re \
+                       nucleo-f446re \
+                       nucleo-l053r8 \
+                       nucleo-l073rz \
+                       nucleo-l152re \
+                       nucleo-l433rc \
+                       nucleo-l476rg \
+                       nucleo-l496zg \
                        nz32-sc151 \
                        opencm904 \
                        openmote-cc2538 \
@@ -148,30 +173,40 @@ ARM_CORTEX_M_BOARDS := airfy-beacon \
                        remote-pa \
                        remote-reva \
                        remote-revb \
+                       saml10-xpro \
+                       saml11-xpro \
                        samd21-xpro \
                        saml21-xpro \
                        samr21-xpro \
+                       samr30-xpro \
                        seeeduino_arch-pro \
+                       slstk3401a \
+                       slstk3402a \
                        sltb001a \
+                       slwstk6000b \
                        slwstk6220a \
                        sodaq-autonomo \
                        sodaq-explorer \
+                       sodaq-one \
                        spark-core \
+                       stk3600 \
+                       stk3700 \
                        stm32f0discovery \
                        stm32f3discovery \
                        stm32f4discovery \
-                       stm32f7discovery \
+                       stm32f769i-disco \
                        udoo \
+                       usb-kw41z \
                        yunjia-nrf51822 \
                        #
-DISABLE_TEST_FOR_ARM_CORTEX_M := tests-relic
+DISABLE_TEST_FOR_ARM_CORTEX_M :=
 
 AVR_BOARDS := arduino-duemilanove \
               arduino-mega2560 \
               arduino-uno \
               waspmote-pro \
               #
-DISABLE_TEST_FOR_AVR := tests-relic tests-cpp_%
+DISABLE_TEST_FOR_AVR := tests-cpp_%
 
 MSP430_BOARDS := chronos \
                  msb-430 \
@@ -181,7 +216,7 @@ MSP430_BOARDS := chronos \
                  wsn430-v1_4 \
                  z1 \
                  #
-DISABLE_TEST_FOR_MSP430 := tests-relic tests-spiffs tests-cpp_%
+DISABLE_TEST_FOR_MSP430 := tests-spiffs tests-cpp_%
 
 ifneq (, $(filter $(ARM7_BOARDS), $(BOARD)))
   UNIT_TESTS := $(filter-out $(DISABLE_TEST_FOR_ARM7), $(UNIT_TESTS))
@@ -205,6 +240,10 @@ ifneq (,$(filter tests-cpp_%, $(UNIT_TESTS)))
   export CPPMIX := 1
 endif
 
+ifneq (,$(filter $(LARGE_STACK_TESTS), $(UNIT_TESTS)))
+  CFLAGS += -DTHREAD_STACKSIZE_MAIN=\(4*THREAD_STACKSIZE_DEFAULT+THREAD_EXTRA_STACKSIZE_PRINTF\)
+endif
+
 DISABLE_MODULE += auto_init
 
 # Pull in `Makefile.include`s from the test suites:
@@ -215,11 +254,17 @@ BASELIBS += $(UNIT_TESTS:%=$(BINDIR)/%.a)
 
 INCLUDES += -I$(RIOTBASE)/tests/unittests/common
 
+# list of boards to run CI tests on
+TEST_ON_CI_WHITELIST += all
+
 include $(RIOTBASE)/Makefile.include
 
 .PHONY: $(UNIT_TESTS)
 
 all:
+
+info-unittests:
+	@echo $(UNIT_TESTS)
 
 $(UNIT_TESTS): all
 
@@ -231,6 +276,3 @@ ifeq (, $(UNIT_TESTS))
 else
   CFLAGS += -DTEST_SUITES='$(subst $() $(),$(charCOMMA),$(UNIT_TESTS:tests-%=%))'
 endif
-
-test:
-	./tests/01-run.py

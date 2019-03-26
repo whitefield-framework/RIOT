@@ -1,8 +1,18 @@
 include ../Makefile.tests_common
 
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-nano arduino-uno
+
 FEATURES_REQUIRED = periph_timer
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+ifneq (,$(filter arduino-duemilanove arduino-mega2560 arduino-uno waspmote-pro,$(BOARD)))
+  TIMER_SPEED ?= 250000
+else ifneq (,$(filter hifive1,$(BOARD)))
+  TIMER_SPEED ?= 32768
+endif
+
+TIMER_SPEED ?= 1000000
+
+CFLAGS += -DTIMER_SPEED=$(TIMER_SPEED)
+include $(RIOTBASE)/Makefile.include

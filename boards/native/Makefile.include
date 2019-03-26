@@ -27,12 +27,10 @@ ifneq ($(shell uname -s),Darwin)
 else
   ifeq (0,$(shell which gobjcopy 2>&1 > /dev/null ; echo $$?))
     export OBJCOPY ?= gobjcopy
-    export OFLAGS ?= -O ihex
   else
-    # If gobjcopy is not available, just create an empty file. The hexfile
+    # If gobjcopy is not available, just do nothing. The hexfile
     # is not used for native anyways.
-    export OBJCOPY ?= touch
-    export OFLAGS =
+    export OBJCOPY ?= true
   endif
 endif
 
@@ -42,14 +40,18 @@ else
   export DEBUGGER ?= gdb
 endif
 
-export TERMPROG ?= $(ELFFILE)
+TERMPROG ?= $(ELFFILE)
 export FLASHER = true
 export VALGRIND ?= valgrind
 export CGANNOTATE ?= cg_annotate
 export GPROF ?= gprof
 
 # basic cflags:
-export CFLAGS += -Wall -Wextra -pedantic -std=gnu99
+export CFLAGS += -Wall -Wextra -pedantic
+# default std set to gnu99 of not overwritten by user
+ifeq (,$(filter -std=%, $(CFLAGS)))
+  export CFLAGS += -std=gnu99
+endif
 
 ifeq ($(shell uname -m),x86_64)
   export CFLAGS += -m32
@@ -98,7 +100,7 @@ else
   export PORT =
 endif
 
-export TERMFLAGS := $(PORT) $(TERMFLAGS)
+TERMFLAGS := $(PORT) $(TERMFLAGS)
 
 export ASFLAGS =
 ifeq ($(shell basename $(DEBUGGER)),lldb)
@@ -112,10 +114,10 @@ term-valgrind: export VALGRIND_FLAGS ?= \
 	--fullpath-after=$(RIOTBASE)/ \
 	--read-var-info=yes
 debug-valgrind-server: export VALGRIND_FLAGS ?= --vgdb=yes --vgdb-error=0 -v \
-	--leak-check=full --track-origins=yes --fullpath-after=${RIOTBASE} \
+	--leak-check=full --track-origins=yes --fullpath-after=$(RIOTBASE) \
 	--read-var-info=yes
 term-cachegrind: export CACHEGRIND_FLAGS += --tool=cachegrind
-term-gprof: export TERMPROG = GMON_OUT_PREFIX=gmon.out $(ELFFILE)
+term-gprof: TERMPROG = GMON_OUT_PREFIX=gmon.out $(ELFFILE)
 all-valgrind: export CFLAGS += -DHAVE_VALGRIND_H -g
 all-valgrind: export NATIVEINCLUDES += $(shell pkg-config valgrind --cflags)
 all-debug: export CFLAGS += -g
@@ -171,8 +173,8 @@ debug-valgrind-server:
 	$(VALGRIND) $(VALGRIND_FLAGS) $(ELFFILE) $(PORT)
 
 debug-valgrind:
-	$(eval VALGRIND_PID ?= $(shell pgrep -n memcheck-x86-li -u ${USER} | cut -d" " -f1))
-	$(eval DEBUGGER_FLAGS := -ex "target remote | vgdb --pid=${VALGRIND_PID}" $(DEBUGGER_FLAGS))
+	$(eval VALGRIND_PID ?= $(shell pgrep -n memcheck-x86-li -u $(USER) | cut -d" " -f1))
+	$(eval DEBUGGER_FLAGS := -ex "target remote | vgdb --pid=$(VALGRIND_PID)" $(DEBUGGER_FLAGS))
 	$(DEBUGGER) $(DEBUGGER_FLAGS)
 
 term-cachegrind:

@@ -51,6 +51,11 @@ uint32_t periph_apb_clk(uint8_t bus)
     if (bus == APB1) {
         return CLOCK_APB1;
     }
+#if defined (CPU_FAM_STM32L4)
+    else if (bus == APB12) {
+        return CLOCK_APB1;
+    }
+#endif
     else {
         return CLOCK_APB2;
     }
@@ -74,6 +79,11 @@ void periph_clk_en(bus_t bus, uint32_t mask)
         case APB2:
             RCC->APB2ENR |= mask;
             break;
+#if defined(CPU_FAM_STM32L4)
+        case APB12:
+            RCC->APB1ENR2 |= mask;
+            break;
+#endif
 #if defined(CPU_FAM_STM32L0)
         case AHB:
             RCC->AHBENR |= mask;
@@ -92,7 +102,7 @@ void periph_clk_en(bus_t bus, uint32_t mask)
             RCC->AHB1ENR |= mask;
             break;
 /* STM32F410 RCC doesn't provide AHB2 and AHB3 */
-#if !defined(CPU_MODEL_STM32F410RB)
+#if !defined(CPU_LINE_STM32F410Rx)
         case AHB2:
             RCC->AHB2ENR |= mask;
             break;
@@ -122,6 +132,11 @@ void periph_clk_dis(bus_t bus, uint32_t mask)
         case APB2:
             RCC->APB2ENR &= ~(mask);
             break;
+#if defined(CPU_FAM_STM32L4)
+        case APB12:
+            RCC->APB1ENR2 &= ~(mask);
+            break;
+#endif
 #if defined(CPU_FAM_STM32L0)
         case AHB:
             RCC->AHBENR &= ~(mask);
@@ -140,7 +155,7 @@ void periph_clk_dis(bus_t bus, uint32_t mask)
             RCC->AHB1ENR &= ~(mask);
             break;
 /* STM32F410 RCC doesn't provide AHB2 and AHB3 */
-#if !defined(CPU_MODEL_STM32F410RB)
+#if !defined(CPU_LINE_STM32F410Rx)
         case AHB2:
             RCC->AHB2ENR &= ~(mask);
             break;

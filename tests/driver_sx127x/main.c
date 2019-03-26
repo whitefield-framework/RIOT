@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "thread.h"
 #include "xtimer.h"
@@ -31,6 +32,7 @@
 #include "shell_commands.h"
 
 #include "net/netdev.h"
+#include "net/netdev/lora.h"
 #include "net/lora.h"
 
 #include "board.h"
@@ -49,7 +51,6 @@ static kernel_pid_t _recv_pid;
 
 static char message[32];
 static sx127x_t sx127x;
-static netdev_t *netdev;
 
 int lora_setup_cmd(int argc, char **argv) {
 
@@ -120,6 +121,7 @@ int random_cmd(int argc, char **argv)
     (void)argc;
     (void)argv;
 
+    netdev_t *netdev = (netdev_t*) &sx127x;
     printf("random: number from sx127x: %u\n",
            (unsigned int) sx127x_random((sx127x_t*) netdev));
 
@@ -141,6 +143,7 @@ int register_cmd(int argc, char **argv)
             puts("usage: register get <all | allinline | regnum>");
             return -1;
         }
+
         if (strcmp(argv[2], "all") == 0) {
             puts("- listing all registers -");
             uint8_t reg = 0, data = 0;
@@ -157,7 +160,8 @@ int register_cmd(int argc, char **argv)
             }
             puts("-done-");
             return 0;
-        } else if (strcmp(argv[2], "allinline") == 0) {
+        }
+        else if (strcmp(argv[2], "allinline") == 0) {
             puts("- listing all registers in one line -");
             /* Listing registers map */
             for (uint16_t reg = 0; reg < 256; reg++) {
@@ -165,24 +169,29 @@ int register_cmd(int argc, char **argv)
             }
             puts("- done -");
             return 0;
-        } else {
+        }
+        else {
             long int num = 0;
             /* Register number in hex */
             if (strstr(argv[2], "0x") != NULL) {
                 num = strtol(argv[2], NULL, 16);
-            } else {
+            }
+            else {
                 num = atoi(argv[2]);
             }
+
             if (num >= 0 && num <= 255) {
                 printf("[regs] 0x%02X = 0x%02X\n",
                        (uint8_t) num,
                        sx127x_reg_read(&sx127x, (uint8_t) num));
-            } else {
+            }
+            else {
                 puts("regs: invalid register number specified");
                 return -1;
             }
         }
-    } else if (strstr(argv[1], "set") != NULL) {
+    }
+    else if (strstr(argv[1], "set") != NULL) {
         if (argc < 4) {
             puts("usage: register set <regnum> <value>");
             return -1;
@@ -193,14 +202,16 @@ int register_cmd(int argc, char **argv)
         /* Register number in hex */
         if (strstr(argv[2], "0x") != NULL) {
             num = strtol(argv[2], NULL, 16);
-        } else {
+        }
+        else {
             num = atoi(argv[2]);
         }
 
         /* Register value in hex */
         if (strstr(argv[3], "0x") != NULL) {
             val = strtol(argv[3], NULL, 16);
-        } else {
+        }
+        else {
             val = atoi(argv[3]);
         }
 
@@ -221,13 +232,16 @@ int send_cmd(int argc, char **argv)
         return -1;
     }
 
-    printf("sending \"%s\" payload (%d bytes)\n",
-           argv[1], strlen(argv[1]) + 1);
+    printf("sending \"%s\" payload (%u bytes)\n",
+           argv[1], (unsigned)strlen(argv[1]) + 1);
 
-    struct iovec vec[1];
-    vec[0].iov_base = argv[1];
-    vec[0].iov_len = strlen(argv[1]) + 1;
-    if (netdev->driver->send(netdev, vec, 1) == -ENOTSUP) {
+    iolist_t iolist = {
+        .iol_base = argv[1],
+        .iol_len = (strlen(argv[1]) + 1)
+    };
+
+    netdev_t *netdev = (netdev_t*) &sx127x;
+    if (netdev->driver->send(netdev, &iolist) == -ENOTSUP) {
         puts("Cannot send: radio is still transmitting");
     }
 
@@ -239,6 +253,7 @@ int listen_cmd(int argc, char **argv)
     (void)argc;
     (void)argv;
 
+    netdev_t *netdev = (netdev_t*) &sx127x;
     /* Switch to continuous listen mode */
     const netopt_enable_t single = false;
     netdev->driver->set(netdev, NETOPT_SINGLE_RECEIVE, &single, sizeof(single));
@@ -261,6 +276,7 @@ int channel_cmd(int argc, char **argv)
         return -1;
     }
 
+    netdev_t *netdev = (netdev_t*) &sx127x;
     uint32_t chan;
     if (strstr(argv[1], "get") != NULL) {
         netdev->driver->get(netdev, NETOPT_CHANNEL_FREQUENCY, &chan, sizeof(chan));
@@ -309,25 +325,33 @@ static void _event_cb(netdev_t *dev, netdev_event_t event)
     }
     else {
         size_t len;
-        netdev_sx127x_lora_packet_info_t packet_info;
+        netdev_lora_rx_info_t packet_info;
         switch (event) {
+            case NETDEV_EVENT_RX_STARTED:
+                puts("Data reception started");
+                break;
+
             case NETDEV_EVENT_RX_COMPLETE:
                 len = dev->driver->recv(dev, NULL, 0, 0);
                 dev->driver->recv(dev, message, len, &packet_info);
-                printf("{Payload: \"%s\" (%d bytes), RSSI: %i, SNR: %i, TOA: %lu}\n",
+                printf("{Payload: \"%s\" (%d bytes), RSSI: %i, SNR: %i, TOA: %" PRIu32 "}\n",
                        message, (int)len,
                        packet_info.rssi, (int)packet_info.snr,
                        sx127x_get_time_on_air((const sx127x_t*)dev, len));
                 break;
+
             case NETDEV_EVENT_TX_COMPLETE:
                 sx127x_set_sleep(&sx127x);
                 puts("Transmission completed");
                 break;
+
             case NETDEV_EVENT_CAD_DONE:
                 break;
+
             case NETDEV_EVENT_TX_TIMEOUT:
                 sx127x_set_sleep(&sx127x);
                 break;
+
             default:
                 printf("Unexpected netdev event received: %d\n", event);
                 break;
@@ -357,10 +381,15 @@ void *_recv_thread(void *arg)
 
 int main(void)
 {
-    memcpy(&sx127x.params, sx127x_params, sizeof(sx127x_params));
-    netdev = (netdev_t*) &sx127x;
+    sx127x.params = sx127x_params[0];
+    netdev_t *netdev = (netdev_t*) &sx127x;
     netdev->driver = &sx127x_driver;
-    netdev->driver->init(netdev);
+
+    if (netdev->driver->init(netdev) < 0) {
+        puts("Failed to initialize SX127x device, exiting");
+        return 1;
+    }
+
     netdev->event_callback = _event_cb;
 
     _recv_pid = thread_create(stack, sizeof(stack), THREAD_PRIORITY_MAIN - 1,

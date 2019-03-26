@@ -6,8 +6,9 @@
 # General Public License v2.1. See the file LICENSE in the top level
 # directory for more details.
 
-import os
 import sys
+from testrunner import run
+
 
 EXPECTED_HELP = (
     'Command              Description',
@@ -16,7 +17,8 @@ EXPECTED_HELP = (
     'end_test             ends a test',
     'echo                 prints the input command',
     'reboot               Reboot the node',
-    'ps                   Prints information about running threads.'
+    'ps                   Prints information about running threads.',
+    'app_metadata         Returns application metadata'
 )
 
 EXPECTED_PS = (
@@ -56,6 +58,4 @@ def testfunc(child):
 
 
 if __name__ == "__main__":
-    sys.path.append(os.path.join(os.environ['RIOTBASE'], 'dist/tools/testrunner'))
-    from testrunner import run
     sys.exit(run(testfunc))

@@ -2,14 +2,17 @@ MODULE = shell_commands
 
 SRC = shell_commands.c sc_sys.c
 
+ifneq (,$(filter app_metadata,$(USEMODULE)))
+  SRC += sc_app_metadata.c
+endif
 ifneq (,$(filter mci,$(USEMODULE)))
   SRC += sc_disk.c
 endif
 ifneq (,$(filter ps,$(USEMODULE)))
   SRC += sc_ps.c
 endif
-ifneq (,$(filter sht11,$(USEMODULE)))
-  SRC += sc_sht11.c
+ifneq (,$(filter sht1x,$(USEMODULE)))
+  SRC += sc_sht1x.c
 endif
 ifneq (,$(filter lpc2387,$(USEMODULE)))
   SRC += sc_heap.c
@@ -37,14 +40,17 @@ ifneq (,$(filter gnrc_ipv6_blacklist,$(USEMODULE)))
 endif
 ifneq (,$(filter gnrc_icmpv6_echo,$(USEMODULE)))
 ifneq (,$(filter xtimer,$(USEMODULE)))
-  SRC += sc_icmpv6_echo.c
+  SRC += sc_gnrc_icmpv6_echo.c
 endif
+endif
+ifneq (,$(filter gnrc_pktbuf_cmd,$(USEMODULE)))
+    SRC += sc_gnrc_pktbuf.c
 endif
 ifneq (,$(filter gnrc_rpl,$(USEMODULE)))
     SRC += sc_gnrc_rpl.c
 endif
 ifneq (,$(filter gnrc_sixlowpan_ctx,$(USEMODULE)))
-ifneq (,$(filter gnrc_sixlowpan_nd_border_router,$(USEMODULE)))
+ifneq (,$(filter gnrc_ipv6_nib_6lbr,$(USEMODULE)))
     SRC += sc_gnrc_6ctx.c
 endif
 endif
@@ -63,9 +69,16 @@ endif
 ifneq (,$(filter conn_can,$(USEMODULE)))
   SRC += sc_can.c
 endif
+ifneq (,$(filter cord_ep,$(USEMODULE)))
+  SRC += sc_cord_ep.c
+endif
 
-ifneq (,$(filter periph_rtc,$(FEATURES_PROVIDED)))
+ifneq (,$(filter periph_rtc,$(USEMODULE)))
   SRC += sc_rtc.c
+endif
+
+ifneq (,$(filter i2c_scan,$(USEMODULE)))
+  SRC += sc_i2c_scan.c
 endif
 
 include $(RIOTBASE)/Makefile.base

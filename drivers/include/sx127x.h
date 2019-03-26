@@ -46,8 +46,8 @@
  * - South Korea: KR920-923 (from 920.9MHz to 923.3MHz exactly)
  *
  * For more information on Semtech SX1272 and SX1276 modules see:
- * - [SX1272/73 datasheet](http://www.semtech.com/images/datasheet/sx1272.pdf)
- * - [SX1276/77/78/79 datasheet](http://www.semtech.com/images/datasheet/sx1276_77_78_79.pdf)
+ * - [SX1272/73 datasheet](https://www.semtech.com/uploads/documents/sx1272.pdf)
+ * - [SX1276/77/78/79 datasheet](https://www.semtech.com/uploads/documents/DS_SX1276-7-8-9_W_APP_V5.pdf)
  *
  * @{
  *
@@ -83,16 +83,7 @@ extern "C" {
 #define SX127X_TX_TIMEOUT_DEFAULT        (1000U * 1000U * 30UL) /**< TX timeout, 30s */
 #define SX127X_RX_SINGLE                 (false)                /**< Single byte receive mode => continuous by default */
 #define SX127X_RX_BUFFER_SIZE            (256)                  /**< RX buffer size */
-
 #define SX127X_RADIO_TX_POWER            (14U)                  /**< Radio power in dBm */
-
-#ifndef SX1272_DEFAULT_PASELECT
-/** @brief   Default PA selection config (1: RFO, 0: PABOOST)
- *
- * This depends on the module configuration.
- */
-#define SX1272_DEFAULT_PASELECT          (1U)
-#endif
 
 #define SX127X_EVENT_HANDLER_STACK_SIZE  (2048U) /**< Stack size event handler */
 #define SX127X_IRQ_DIO0                  (1<<0)  /**< DIO0 IRQ */
@@ -101,6 +92,12 @@ extern "C" {
 #define SX127X_IRQ_DIO3                  (1<<3)  /**< DIO3 IRQ */
 #define SX127X_IRQ_DIO4                  (1<<4)  /**< DIO4 IRQ */
 #define SX127X_IRQ_DIO5                  (1<<5)  /**< DIO5 IRQ */
+#ifdef SX127X_USE_DIO_MULTI
+#define SX127X_IRQ_DIO_MULTI             (1<<6)  /**< DIO MULTI IRQ */
+#endif
+#ifndef SX127X_DIO_PULL_MODE
+#define SX127X_DIO_PULL_MODE             (GPIO_IN_PD) /**< pull down DIOx */
+#endif
 /** @} */
 
 /**
@@ -109,8 +106,8 @@ extern "C" {
 enum {
     SX127X_INIT_OK = 0,                /**< Initialization was successful */
     SX127X_ERR_SPI,                    /**< Failed to initialize SPI bus or CS line */
-    SX127X_ERR_TEST_FAILED,            /**< SX127X testing failed during initialization (check chip) */
-    SX127X_ERR_THREAD                  /**< Unable to create DIO handling thread (check amount of free memory) */
+    SX127X_ERR_GPIOS,                  /**< Failed to initialize GPIOs */
+    SX127X_ERR_NODEV                   /**< No valid device version found */
 };
 
 /**
@@ -145,6 +142,18 @@ enum {
 };
 
 /**
+ * @brief Power amplifier modes
+ *
+ * Default value is SX127X_PA_RFO.
+ *
+ * The power amplifier mode depends on the module hardware configuration.
+ */
+enum {
+    SX127X_PA_RFO = 0,                 /**< RFO HF or RFO LF */
+    SX127X_PA_BOOST,                   /**< Power amplifier boost (high power) */
+};
+
+/**
  * @name    SX127X device descriptor boolean flags
  * @{
  */
@@ -167,8 +176,8 @@ typedef struct {
     uint8_t coderate;                  /**< Error coding rate */
     uint8_t freq_hop_period;           /**< Frequency hop period */
     uint8_t flags;                     /**< Boolean flags */
-    uint32_t rx_timeout;               /**< RX timeout in symbols */
-    uint32_t tx_timeout;               /**< TX timeout in symbols */
+    uint32_t rx_timeout;               /**< RX timeout in microseconds */
+    uint32_t tx_timeout;               /**< TX timeout in microseconds */
 } sx127x_lora_settings_t;
 
 /**
@@ -205,6 +214,10 @@ typedef struct {
     gpio_t dio3_pin;                   /**< Interrupt line DIO3 (CAD done) */
     gpio_t dio4_pin;                   /**< Interrupt line DIO4 (not used) */
     gpio_t dio5_pin;                   /**< Interrupt line DIO5 (not used) */
+#ifdef SX127X_USE_DIO_MULTI
+    gpio_t dio_multi_pin;              /**< Interrupt line for multiple IRQs */
+#endif
+    uint8_t paselect;                  /**< Power amplifier mode (RFO or PABOOST) */
 } sx127x_params_t;
 
 /**
@@ -242,7 +255,7 @@ void sx127x_setup(sx127x_t *dev, const sx127x_params_t *params);
  *
  * @param[in] dev                      The sx127x device descriptor
  */
-void sx127x_reset(const sx127x_t *dev);
+int sx127x_reset(const sx127x_t *dev);
 
 /**
  * @brief   Initializes the transceiver.

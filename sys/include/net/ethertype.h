@@ -34,8 +34,10 @@ extern "C" {
 #define ETHERTYPE_RESERVED      (0x0000)    /**< Reserved */
 #define ETHERTYPE_IPV4          (0x0800)    /**< Internet protocol version 4 */
 #define ETHERTYPE_ARP           (0x0806)    /**< Address resolution protocol */
-#define ETHERTYPE_NDN           (0x0801)    /**< Parc CCNX */
+#define ETHERTYPE_CCNX          (0x0801)    /**< Parc CCNX */
+#define ETHERTYPE_NDN           (0x8624)    /**< NDN Protocol (http://named-data.net/) */
 #define ETHERTYPE_IPV6          (0x86dd)    /**< Internet protocol version 6 */
+#define ETHERTYPE_6LOENC        (0xa0ed)    /**< 6LoWPAN encapsulation */
 #define ETHERTYPE_UNKNOWN       (0xffff)    /**< Reserved (no protocol specified) */
 
 #ifdef __cplusplus
