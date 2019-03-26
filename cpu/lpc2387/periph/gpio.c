@@ -31,6 +31,7 @@
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
+#ifdef MODULE_PERIPH_GPIO_IRQ
 #define GPIO_NUM_ISR    (16)
 
 static BITFIELD(_gpio_config_bitfield, GPIO_NUM_ISR);
@@ -41,11 +42,6 @@ static BITFIELD(_gpio_falling, GPIO_NUM_ISR);
 static uint8_t _gpio_isr_map[64]; /* only ports 0+2 can have ISRs */
 
 static void _gpio_configure(gpio_t pin, unsigned rising, unsigned falling);
-
-void gpio_init_ports(void) {
-    SCS |= 0x1; /* set GPIO ports 0 and 1 to FIO mode (3.7.2) */
-    memset(&_gpio_isr_map[0], 0xff, 64);
-}
 
 static int _isr_map_entry(gpio_t pin) {
     unsigned _pin = pin & 31;
@@ -62,23 +58,32 @@ static int _isr_map_entry(gpio_t pin) {
 
     return _pin;
 }
+#endif /* MODULE_PERIPH_GPIO_IRQ */
+
+void gpio_init_ports(void) {
+    SCS |= 0x1; /* set GPIO ports 0 and 1 to FIO mode (3.7.2) */
+#ifdef MODULE_PERIPH_GPIO_IRQ
+    memset(&_gpio_isr_map[0], 0xff, 64);
+#endif /* MODULE_PERIPH_GPIO_IRQ */
+}
 
 int gpio_init(gpio_t pin, gpio_mode_t mode)
 {
     unsigned _pin = pin & 31;
     unsigned port = pin >> 5;
-
-    if (mode != GPIO_OUT) {
-        return -1;
-    }
-
     FIO_PORT_t *_port = &FIO_PORTS[port];
 
-    /* set mask */
-    _port->MASK = ~(0x1<<_pin);
-
     /* set direction */
-    _port->DIR = ~0;
+    switch (mode){
+        case GPIO_OUT:
+            _port->DIR |= 1<<_pin;
+            break;
+        case GPIO_IN:
+            _port->DIR &= ~(1<<_pin);
+            break;
+        default:
+            return -1;
+    }
 
     gpio_init_mux(pin, 0);
 
@@ -88,13 +93,103 @@ int gpio_init(gpio_t pin, gpio_mode_t mode)
 int gpio_init_mux(unsigned pin, unsigned mux)
 {
     (void) mux;
-    unsigned _pin = pin & 31;
-    PINSEL[pin>>4] &= ~(0x1 << (_pin*2));
+    unsigned pos = (pin & 0xf) << 1;
+    PINSEL[pin>>4] &= ~(0x3 << pos);
     return 0;
 }
 
+int gpio_read(gpio_t pin)
+{
+    unsigned _pin = pin & 31;
+    unsigned port = pin >> 5;
+    FIO_PORT_t *_port = &FIO_PORTS[port];
+    return (_port->PIN & (1 << _pin)) != 0;
+}
+
+void gpio_set(gpio_t pin)
+{
+    unsigned _pin = pin & 31;
+    unsigned port = pin >> 5;
+    FIO_PORT_t *_port = &FIO_PORTS[port];
+    _port->SET = 1 << _pin;
+}
+
+void gpio_clear(gpio_t pin)
+{
+    unsigned _pin = pin & 31;
+    unsigned port = pin >> 5;
+    FIO_PORT_t *_port = &FIO_PORTS[port];
+    _port->CLR = 1 << _pin;
+}
+
+void gpio_toggle(gpio_t dev)
+{
+    if (gpio_read(dev)) {
+        gpio_clear(dev);
+    }
+    else {
+        gpio_set(dev);
+    }
+}
+
+void gpio_write(gpio_t dev, int value)
+{
+    if (value) {
+        gpio_set(dev);
+    }
+    else {
+        gpio_clear(dev);
+    }
+}
+
+#ifdef MODULE_PERIPH_GPIO_IRQ
+static void _gpio_configure(gpio_t pin, unsigned rising, unsigned falling)
+{
+    unsigned _pin = pin & 31;
+    unsigned port = pin >> 5;
+
+    /* set irq settings */
+    volatile unsigned long *en_f;
+    volatile unsigned long *en_r;
+    volatile unsigned long *en_clr;
+
+    if (!port) {
+            en_f = &IO0_INT_EN_F;
+            en_r = &IO0_INT_EN_R;
+            en_clr = &IO0_INT_CLR;
+    }
+    else {
+            en_f = &IO2_INT_EN_F;
+            en_r = &IO2_INT_EN_R;
+            en_clr = &IO2_INT_CLR;
+    }
+
+    /* configure irq */
+    unsigned int bit = 0x1 << _pin;
+
+    unsigned state = irq_disable();
+
+    *en_clr |= bit;                                         /* clear interrupt */
+
+    if (falling) {
+        *en_f |= bit;                                       /* enable falling edge */
+    }
+    else {
+        *en_f &= ~bit;                                      /* disable falling edge */
+    }
+
+    if (rising) {
+        *en_r |= bit;                                       /* enable rising edge */
+    }
+    else {
+        *en_r &= ~bit;                                      /* disable rising edge */
+    }
+
+    irq_restore(state);
+}
+
 int gpio_init_int(gpio_t pin, gpio_mode_t mode, gpio_flank_t flank,
-                    gpio_cb_t cb, void *arg)
+                  gpio_cb_t cb, void *arg)
 {
     (void)mode;
 
@@ -152,51 +247,6 @@ int gpio_init_int(gpio_t pin, gpio_mode_t mode, gpio_flank_t flank,
     return 0;
 }
 
-static void _gpio_configure(gpio_t pin, unsigned rising, unsigned falling)
-{
-    unsigned _pin = pin & 31;
-    unsigned port = pin >> 5;
-
-    /* set irq settings */
-    volatile unsigned long *en_f;
-    volatile unsigned long *en_r;
-    volatile unsigned long *en_clr;
-
-    if (!port) {
-            en_f = &IO0_INT_EN_F;
-            en_r = &IO0_INT_EN_R;
-            en_clr = &IO0_INT_CLR;
-    }
-    else {
-            en_f = &IO2_INT_EN_F;
-            en_r = &IO2_INT_EN_R;
-            en_clr = &IO2_INT_CLR;
-    }
-
-    /* configure irq */
-    unsigned int bit = 0x1 << _pin;
-
-    unsigned state = irq_disable();
-
-    *en_clr |= bit;                                         /* clear interrupt */
-
-    if (falling) {
-        *en_f |= bit;                                       /* enable falling edge */
-    }
-    else {
-        *en_f &= ~bit;                                      /* disable falling edge */
-    }
-
-    if (rising) {
-        *en_r |= bit;                                       /* enable rising edge */
-    }
-    else {
-        *en_r &= ~bit;                                      /* disable rising edge */
-    }
-
-    irq_restore(state);
-}
-
 void gpio_irq_enable(gpio_t pin)
 {
     int isr_map_entry =_isr_map_entry(pin);
@@ -215,53 +265,6 @@ void gpio_irq_enable(gpio_t pin)
 void gpio_irq_disable(gpio_t dev)
 {
     _gpio_configure(dev, 0, 0);
-}
-
-int gpio_read(gpio_t pin)
-{
-    unsigned _pin = pin & 31;
-    unsigned port = pin >> 5;
-    FIO_PORT_t *_port = &FIO_PORTS[port];
-    _port->MASK = ~(1<<_pin);
-    return _port->PIN != 0;
-}
-
-void gpio_set(gpio_t pin)
-{
-    unsigned _pin = pin & 31;
-    unsigned port = pin >> 5;
-    FIO_PORT_t *_port = &FIO_PORTS[port];
-    _port->MASK = ~(1<<_pin);
-    _port->SET = ~0;
-}
-
-void gpio_clear(gpio_t pin)
-{
-    unsigned _pin = pin & 31;
-    unsigned port = pin >> 5;
-    FIO_PORT_t *_port = &FIO_PORTS[port];
-    _port->MASK = ~(1<<_pin);
-    _port->CLR = ~0;
-}
-
-void gpio_toggle(gpio_t dev)
-{
-    if (gpio_read(dev)) {
-        gpio_clear(dev);
-    }
-    else {
-        gpio_set(dev);
-    }
-}
-
-void gpio_write(gpio_t dev, int value)
-{
-    if (value) {
-        gpio_set(dev);
-    }
-    else {
-        gpio_clear(dev);
-    }
 }
 
 static void test_irq(int port, unsigned long f_mask, unsigned long r_mask)
@@ -309,3 +312,4 @@ void GPIO_IRQHandler(void)
 
     VICVectAddr = 0;                                /* Acknowledge Interrupt */
 }
+#endif /* MODULE_PERIPH_GPIO_IRQ */

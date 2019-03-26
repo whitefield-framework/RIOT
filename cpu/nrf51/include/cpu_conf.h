@@ -7,7 +7,9 @@
  */
 
 /**
- * @ingroup         cpu_nrf51822
+ * @defgroup        cpu_nrf51 Nordic nRF51 MCU
+ * @ingroup         cpu
+ * @brief           Nordic nRF51 family of CPUs
  * @{
  *
  * @file
@@ -42,7 +44,7 @@ extern "C" {
  */
 #define FLASHPAGE_SIZE          (1024U)
 
-#if defined(CPU_MODEL_NRF51X22XXAA)
+#if defined(CPU_MODEL_NRF51X22XXAA) || defined(CPU_MODEL_NRF51X22XXAC)
 #define FLASHPAGE_NUMOF         (256U)
 #elif defined(CPU_MODEL_NRF51X22XXAB)
 #define FLASHPAGE_NUMOF         (128U)
@@ -57,6 +59,15 @@ extern "C" {
 #ifndef GNRC_PKTBUF_SIZE
 #define GNRC_PKTBUF_SIZE                (2048)
 #endif
+/** @} */
+
+/**
+ * @brief   CPU specific PWM configuration
+ * @{
+ */
+#define PWM_GPIOTE_CH           (2U)
+#define PWM_PPI_A               (0U)
+#define PWM_PPI_B               (1U)
 /** @} */
 
 #ifdef __cplusplus

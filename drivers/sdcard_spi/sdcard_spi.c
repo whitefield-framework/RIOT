@@ -24,6 +24,7 @@
 #include "sdcard_spi_params.h"
 #include "periph/spi.h"
 #include "periph/gpio.h"
+#include "checksum/ucrc16.h"
 #include "xtimer.h"
 
 #include <stdio.h>
@@ -45,9 +46,6 @@ static sd_rw_response_t _write_data_packet(sdcard_spi_t *card, char token, const
 /* CRC-7 (polynomial: x^7 + x^3 + 1) LSB of CRC-7 in a 8-bit variable is always 1*/
 static char _crc_7(const char *data, int n);
 
-/* CRC-16 (CRC-CCITT) (polynomial: x^16 + x^12 + x^5 + x^1) */
-static uint16_t _crc_16(const char *data, size_t n);
-
 /* use this transfer method instead of _transfer_bytes to force the use of 0xFF as dummy bytes */
 static inline int _transfer_bytes(sdcard_spi_t *card, const char *out, char *in, unsigned int length);
 
@@ -64,7 +62,7 @@ static int (*_dyn_spi_rxtx_byte)(sdcard_spi_t *card, char out, char *in);
 int sdcard_spi_init(sdcard_spi_t *card, const sdcard_spi_params_t *params)
 {
     sd_init_fsm_state_t state = SD_INIT_START;
-    memcpy(&card->params, params, sizeof(sdcard_spi_params_t));
+    card->params = *params;
     card->spi_clk = SD_CARD_SPI_SPEED_PREINIT;
 
     do {
@@ -412,20 +410,6 @@ static char _crc_7(const char *data, int n)
     return (crc << 1) | 1;
 }
 
-static uint16_t _crc_16(const char *data, size_t n)
-{
-    uint16_t crc = 0;
-
-    for (size_t i = 0; i < n; i++) {
-        crc = (uint8_t)(crc >> 8) | (crc << 8);
-        crc ^= data[i];
-        crc ^= (uint8_t)(crc & 0xFF) >> 4;
-        crc ^= crc << 12;
-        crc ^= (crc & 0xFF) << 5;
-    }
-    return crc;
-}
-
 char sdcard_spi_send_cmd(sdcard_spi_t *card, char sd_cmd_idx, uint32_t argument, int32_t max_retry)
 {
     int try_cnt = 0;
@@ -442,7 +426,7 @@ char sdcard_spi_send_cmd(sdcard_spi_t *card, char sd_cmd_idx, uint32_t argument,
     char echo[sizeof(cmd_data)];
 
     do {
-        DEBUG("sdcard_spi_send_cmd: CMD%02d (0x%08lx) (retry %d)\n", sd_cmd_idx, argument, try_cnt);
+        DEBUG("sdcard_spi_send_cmd: CMD%02d (0x%08" PRIx32 ") (retry %d)\n", sd_cmd_idx, argument, try_cnt);
 
         if (!_wait_for_not_busy(card, SD_WAIT_FOR_NOT_BUSY_CNT)) {
             DEBUG("sdcard_spi_send_cmd: timeout while waiting for bus to be not busy!\n");
@@ -491,7 +475,7 @@ char sdcard_spi_send_acmd(sdcard_spi_t *card, char sd_cmd_idx, uint32_t argument
     char r1_resu;
 
     do {
-        DEBUG("sdcard_spi_send_acmd: CMD%02d (0x%08lx)(retry %d)\n", sd_cmd_idx, argument, err_cnt);
+        DEBUG("sdcard_spi_send_acmd: CMD%02d (0x%08" PRIx32 ")(retry %d)\n", sd_cmd_idx, argument, err_cnt);
         r1_resu = sdcard_spi_send_cmd(card, SD_CMD_55, SD_CMD_NO_ARG, 0);
         if (R1_VALID(r1_resu) && !R1_ERROR(r1_resu)) {
             r1_resu = sdcard_spi_send_cmd(card, sd_cmd_idx, argument, 0);
@@ -622,9 +606,9 @@ static sd_rw_response_t _read_data_packet(sdcard_spi_t *card, char token, char *
 
         char crc_bytes[2];
         if (_transfer_bytes(card, 0, crc_bytes, sizeof(crc_bytes)) == sizeof(crc_bytes)) {
-            uint16_t data__crc_16 = (crc_bytes[0] << 8) | crc_bytes[1];
+            uint16_t data_crc16 = (crc_bytes[0] << 8) | crc_bytes[1];
 
-            if (_crc_16(data, size) == data__crc_16) {
+            if (ucrc16_calc_be((uint8_t *)data, size, UCRC16_CCITT_POLY_BE, 0) == data_crc16) {
                 DEBUG("_read_data_packet: [OK]\n");
                 return SD_RW_OK;
             }
@@ -712,8 +696,8 @@ static sd_rw_response_t _write_data_packet(sdcard_spi_t *card, char token, const
 
     if (_transfer_bytes(card, data, 0, size) == size) {
 
-        uint16_t data__crc_16 = _crc_16(data, size);
-        char crc[sizeof(uint16_t)] = { data__crc_16 >> 8, data__crc_16 & 0xFF };
+        uint16_t data_crc16 = ucrc16_calc_be((uint8_t *)data, size, UCRC16_CCITT_POLY_BE, 0);
+        char crc[sizeof(uint16_t)] = { data_crc16 >> 8, data_crc16 & 0xFF };
 
         if (_transfer_bytes(card, crc, 0, sizeof(crc)) == sizeof(crc)) {
 
@@ -1025,7 +1009,7 @@ uint64_t sdcard_spi_get_capacity(sdcard_spi_t *card)
         return blocknr * block_len;
     }
     else if (card->csd_structure == SD_CSD_V2) {
-        return (card->csd.v2.C_SIZE + 1) * (uint64_t)(SD_HC_BLOCK_SIZE << 10);
+        return (card->csd.v2.C_SIZE + 1) * (((uint64_t)SD_HC_BLOCK_SIZE) << 10);
     }
     return 0;
 }

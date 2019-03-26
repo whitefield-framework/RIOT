@@ -37,7 +37,7 @@ void mrf24j40_setup(mrf24j40_t *dev, const mrf24j40_params_t *params)
 
     netdev->driver = &mrf24j40_driver;
     /* initialize device descriptor */
-    memcpy(&dev->params, params, sizeof(mrf24j40_params_t));
+    dev->params = *params;
 }
 
 void mrf24j40_reset(mrf24j40_t *dev)
@@ -46,9 +46,7 @@ void mrf24j40_reset(mrf24j40_t *dev)
 
     mrf24j40_init(dev);
 
-    /* reset options and sequence number */
-    dev->netdev.seq = 0;
-    dev->netdev.flags = 0;
+    netdev_ieee802154_reset(&dev->netdev);
 
     /* get an 8-byte unique ID to use as hardware address */
     luid_get(addr_long.uint8, IEEE802154_LONG_ADDRESS_LEN);
@@ -58,8 +56,6 @@ void mrf24j40_reset(mrf24j40_t *dev)
     mrf24j40_set_addr_long(dev, ntohll(addr_long.uint64.u64));
     mrf24j40_set_addr_short(dev, ntohs(addr_long.uint16[0].u16));
 
-    /* set default PAN id */
-    mrf24j40_set_pan(dev, IEEE802154_DEFAULT_PANID);
     mrf24j40_set_chan(dev, IEEE802154_DEFAULT_CHANNEL);
 
     /* configure Immediate Sleep and Wake-Up mode */
@@ -70,18 +66,6 @@ void mrf24j40_reset(mrf24j40_t *dev)
     mrf24j40_set_option(dev, NETDEV_IEEE802154_SRC_MODE_LONG, true);
     mrf24j40_set_option(dev, NETDEV_IEEE802154_ACK_REQ, true);
     mrf24j40_set_option(dev, MRF24J40_OPT_CSMA, true);
-    mrf24j40_set_option(dev, MRF24J40_OPT_TELL_RX_START, false);
-    mrf24j40_set_option(dev, MRF24J40_OPT_TELL_RX_END, true);
-#ifdef MODULE_NETSTATS_L2
-    mrf24j40_set_option(dev, MRF24J40_OPT_TELL_TX_END, true);
-#endif
-
-    /* set default protocol */
-#ifdef MODULE_GNRC_SIXLOWPAN
-    dev->netdev.proto = GNRC_NETTYPE_SIXLOWPAN;
-#elif MODULE_GNRC
-    dev->netdev.proto = GNRC_NETTYPE_UNDEF;
-#endif
 
     /* go into RX state */
     mrf24j40_reset_tasks(dev);

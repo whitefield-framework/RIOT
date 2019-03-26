@@ -34,6 +34,21 @@ current configuration or not.
 Modules can be used by adding their name to the `USEMODULE` macro of your
 application's Makefile.
 
+### Pitfalls ###
+
+The `MODULE` name should be unique or build breaks as modules overwrite the
+same output file. This might for example lead to `undefined reference to` errors
+in the linker which can be hard to track down.
+
+This problem happened in the past for:
+
+ * Packages root directory (libfixmath/u8g2)
+ * boards/cpu/periph and their common boards/cpu/periph
+
+Note: even if all boards and cpus implement the `board` and `cpu` modules, only
+      one is used in an application so there is no conflict.
+
+
 Module dependencies
 ===================
 Your module may depend on other modules to minimize code duplication. These
@@ -53,8 +68,15 @@ their dependencies.
 Modules outside of RIOTBASE                      {#modules-outside-of-riotbase}
 ===========================
 Modules can be defined outside `RIOTBASE`. In addition to add it to `USEMODULE`
-the user needs to add the path to the module to `EXTERNAL_MODULES` and add the
-include path to the API definitions to `INCLUDES`.
+the user needs to add the module path to `EXTERNAL_MODULE_DIRS`.
+
+The external module can optionally define the following files:
+* `Makefile.include` file to set global build configuration like `CFLAGS` or add
+  API headers include paths to the `USEMODULE_INCLUDES` variable.
+* `Makefile.dep` file to set module dependencies
+
+An example can be found in
+[`tests/external_module_dirs`](https://github.com/RIOT-OS/RIOT/tree/master/tests/external_module_dirs)
 
 Pseudomodules                                                  {#pseudomodules}
 =============

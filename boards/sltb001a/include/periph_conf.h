@@ -21,9 +21,7 @@
 #define PERIPH_CONF_H
 
 #include "cpu.h"
-
 #include "periph_cpu.h"
-
 #include "em_cmu.h"
 
 #ifdef __cplusplus
@@ -53,6 +51,15 @@ extern "C" {
 #endif
 #ifndef CLOCK_LFE
 #define CLOCK_LFE           cmuSelect_LFXO
+#endif
+/** @} */
+
+/**
+ * @name    DC-DC configuration
+ * @{
+ */
+#ifdef EMU_DCDCINIT_OFF
+#error "This option will soft-brick your board. Please remove it."
 #endif
 /** @} */
 
@@ -98,8 +105,8 @@ static const i2c_conf_t i2c_config[] = {
         .loc = I2C_ROUTELOC0_SDALOC_LOC15 |
                I2C_ROUTELOC0_SCLLOC_LOC15,
         .cmu = cmuClock_I2C0,
-        .irq = I2C0_IRQn
-
+        .irq = I2C0_IRQn,
+        .speed = I2C_SPEED_NORMAL
     }
 };
 
@@ -178,6 +185,9 @@ static const uart_conf_t uart_config[] = {
         .tx_pin = GPIO_PIN(PA, 0),
         .loc = USART_ROUTELOC0_RXLOC_LOC0 |
                USART_ROUTELOC0_TXLOC_LOC0,
+#if EFM32_UART_MODES
+        .mode = UART_MODE_8N1,
+#endif
         .cmu = cmuClock_USART0,
         .irq = USART0_RX_IRQn
     },
@@ -187,6 +197,9 @@ static const uart_conf_t uart_config[] = {
         .tx_pin = GPIO_PIN(PC, 7),
         .loc = USART_ROUTELOC0_RXLOC_LOC11 |
                USART_ROUTELOC0_TXLOC_LOC11,
+#if EFM32_UART_MODES
+        .mode = UART_MODE_8N1,
+#endif
         .cmu = cmuClock_USART1,
         .irq = USART1_RX_IRQn
     },
@@ -196,6 +209,9 @@ static const uart_conf_t uart_config[] = {
         .tx_pin = GPIO_PIN(PD, 10),
         .loc = LEUART_ROUTELOC0_RXLOC_LOC18 |
                LEUART_ROUTELOC0_TXLOC_LOC18,
+#if EFM32_UART_MODES
+        .mode = UART_MODE_8N1,
+#endif
         .cmu = cmuClock_LEUART0,
         .irq = LEUART0_IRQn
     }

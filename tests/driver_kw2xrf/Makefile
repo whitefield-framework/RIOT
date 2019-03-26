@@ -1,9 +1,9 @@
 include ../Makefile.tests_common
 
-FEATURES_REQUIRED = periph_spi periph_gpio
-
-BOARD_INSUFFICIENT_MEMORY := nucleo32-f031 nucleo32-f042 nucleo32-l031 \
-                             nucleo-f334 nucleo-l053 stm32f0discovery
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-mega2560 arduino-nano \
+                             arduino-uno nucleo-f031k6 nucleo-f042k6 \
+                             nucleo-l031k6 nucleo-f334r8 nucleo-l053r8 \
+                             stm32f0discovery waspmote-pro
 
 USEMODULE += auto_init_gnrc_netif
 USEMODULE += gnrc_netdev_default

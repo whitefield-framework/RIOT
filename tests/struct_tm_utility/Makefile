@@ -2,13 +2,14 @@ include ../Makefile.tests_common
 
 DISABLE_MODULE += auto_init
 
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-nano arduino-uno
+
 USEMODULE += shell
 USEMODULE += timex
 
 # The MSP-430 toolchain lacks sscanf:
 BOARD_BLACKLIST := chronos msb-430 msb-430h telosb wsn430-v1_3b wsn430-v1_4 z1
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+include $(RIOTBASE)/Makefile.include

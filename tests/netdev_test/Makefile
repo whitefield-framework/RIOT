@@ -4,11 +4,10 @@
 CFLAGS += -DNDEBUG
 include ../Makefile.tests_common
 
-BOARD_INSUFFICIENT_MEMORY := nucleo32-f031
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-nano arduino-uno \
+                             nucleo-f031k6
 
 DISABLE_MODULE = auto_init
-
-FEATURES_REQUIRED += periph_timer # xtimer required for this application
 
 USEMODULE += gnrc
 USEMODULE += gnrc_neterr
@@ -19,7 +18,6 @@ USEMODULE += od
 
 CFLAGS += -DGNRC_PKTBUF_SIZE=200
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+include $(RIOTBASE)/Makefile.include

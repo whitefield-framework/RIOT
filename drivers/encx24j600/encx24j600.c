@@ -33,11 +33,6 @@
 #include "net/eui64.h"
 #include "net/ethernet.h"
 
-#ifdef MODULE_NETSTATS_L2
-#include <string.h>
-#include "net/netstats.h"
-#endif
-
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
@@ -64,7 +59,7 @@ static inline int _packets_available(encx24j600_t *dev);
 static void _get_mac_addr(netdev_t *dev, uint8_t* buf);
 
 /* netdev interface */
-static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count);
+static int _send(netdev_t *netdev, const iolist_t *iolist);
 static int _recv(netdev_t *netdev, void *buf, size_t len, void *info);
 static int _init(netdev_t *dev);
 static void _isr(netdev_t *dev);
@@ -285,13 +280,10 @@ static int _init(netdev_t *encdev)
 
     unlock(dev);
 
-#ifdef MODULE_NETSTATS_L2
-    memset(&encdev->stats, 0, sizeof(netstats_t));
-#endif
     return 0;
 }
 
-static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count) {
+static int _send(netdev_t *netdev, const iolist_t *iolist) {
     encx24j600_t * dev = (encx24j600_t *) netdev;
     lock(dev);
 
@@ -301,9 +293,9 @@ static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count) {
     /* copy packet to SRAM */
     size_t len = 0;
 
-    for (unsigned i = 0; i < count; i++) {
-        sram_op(dev, ENC_WGPDATA, (i ? 0xFFFF : TX_BUFFER_START), vector[i].iov_base, vector[i].iov_len);
-        len += vector[i].iov_len;
+    for (const iolist_t *iol = iolist; iol; iol = iol->iol_next) {
+        sram_op(dev, ENC_WGPDATA, ((iol == iolist) ? TX_BUFFER_START : 0xFFFF), iol->iol_base, iol->iol_len);
+        len += iol->iol_len;
     }
 
     /* set start of TX packet and length */
@@ -316,10 +308,6 @@ static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count) {
     /* wait for sending to complete */
     /* (not sure if it is needed, keeping the line uncommented) */
     /*while ((reg_get(dev, ENC_ECON1) & ENC_TXRTS)) {}*/
-
-#ifdef MODULE_NETSTATS_L2
-    netdev->stats.tx_bytes += len;
-#endif
 
     unlock(dev);
 
@@ -367,13 +355,12 @@ static int _recv(netdev_t *netdev, void *buf, size_t len, void *info)
             unlock(dev);
             return -ENOBUFS;
         }
-#ifdef MODULE_NETSTATS_L2
-        netdev->stats.rx_count++;
-        netdev->stats.rx_bytes += payload_len;
-#endif
         /* read packet (without 4 bytes checksum) */
         sram_op(dev, ENC_RRXDATA, 0xFFFF, buf, payload_len);
+    }
 
+    /* Frame was retrieved or drop was requested --> remove it from buffer */
+    if (buf || (len > 0)) {
         /* decrement available packet count */
         cmd(dev, ENC_SETPKTDEC);
 
@@ -401,6 +388,19 @@ static int _get(netdev_t *dev, netopt_t opt, void *value, size_t max_len)
                 res = ETHERNET_ADDR_LEN;
             }
             break;
+        case NETOPT_LINK_CONNECTED:
+            {
+                encx24j600_t * encdev = (encx24j600_t *) dev;
+                lock(encdev);
+                if (reg_get(encdev, ENC_ESTAT) & ENC_PHYLNK) {
+                    *((netopt_enable_t *)value) = NETOPT_ENABLE;
+                }
+                else {
+                    *((netopt_enable_t *)value) = NETOPT_DISABLE;
+                }
+                unlock(encdev);
+                return sizeof(netopt_enable_t);
+            }
         default:
             res = netdev_eth_get(dev, opt, value, max_len);
             break;

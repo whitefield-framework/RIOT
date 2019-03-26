@@ -535,7 +535,7 @@ diskio_sta_t mci_initialize(void)
     //for (Timer[0] = 2; Timer[0]; );
     xtimer_usleep(250);
 
-    send_cmd(CMD0, 0, 0, NULL);             /* Enter idle state */
+    send_cmd(CMD0, 0, 0, resp);             /* Enter idle state */
     CardRCA = 0;
 
     /*---- Card is 'idle' state ----*/
@@ -578,7 +578,8 @@ diskio_sta_t mci_initialize(void)
 
             /* This loop will take a time. Insert wai_tsk(1) here for multitask envilonment. */
             if (xtimer_now_usec() > (start + 1000000/* !Timer[0] */)) {
-                DEBUG("now: %lu, started at: %lu\n", xtimer_now_usec(), start);
+                DEBUG("now: %" PRIu32 ", started at: %" PRIu32 "\n",
+                      xtimer_now_usec(), start);
                 DEBUG("%s, %d: Timeout #2\n", RIOT_FILE_RELATIVE, __LINE__);
                 goto di_fail;
             }

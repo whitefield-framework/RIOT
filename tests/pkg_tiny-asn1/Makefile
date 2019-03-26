@@ -1,8 +1,11 @@
 include ../Makefile.tests_common
 
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-nano arduino-uno
+
+BOARD_BLACKLIST := wsn430-v1_3b wsn430-v1_4
+
 USEPKG += tiny-asn1
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	./tests/01-run.py
+include $(RIOTBASE)/Makefile.include

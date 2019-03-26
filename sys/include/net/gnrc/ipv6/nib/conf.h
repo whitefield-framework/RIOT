@@ -7,8 +7,9 @@
  */
 
 /**
- * @defgroup    net_gnrc_ipv6_nib_conf  Configuration macros
+ * @defgroup    net_gnrc_ipv6_nib_conf  GNRC IPv6 NIB compile configurations
  * @ingroup     net_gnrc_ipv6_nib
+ * @ingroup     config
  * @brief       Configuration macros for neighbor information base
  * @{
  *
@@ -28,6 +29,9 @@ extern "C" {
 #ifdef MODULE_GNRC_IPV6_NIB_6LBR
 #ifndef GNRC_IPV6_NIB_CONF_6LBR
 #define GNRC_IPV6_NIB_CONF_6LBR         (1)
+#endif
+#ifndef GNRC_IPV6_NIB_CONF_SLAAC
+#define GNRC_IPV6_NIB_CONF_SLAAC        (1)
 #endif
 #ifndef GNRC_IPV6_NIB_NUMOF
 #define GNRC_IPV6_NIB_NUMOF             (16)
@@ -66,6 +70,10 @@ extern "C" {
 
 #ifdef MODULE_GNRC_IPV6_NIB_ROUTER
 #define GNRC_IPV6_NIB_CONF_ROUTER       (1)
+#endif
+
+#ifdef MODULE_GNRC_IPV6_NIB_DNS
+#define GNRC_IPV6_NIB_CONF_DNS          (1)
 #endif
 
 /**
@@ -172,12 +180,21 @@ extern "C" {
 #endif
 
 /**
+ * @brief   Support for DNS configuration options
+ *
+ * @see [RFC 8106](https://tools.ietf.org/html/rfc8106)
+ */
+#ifndef GNRC_IPV6_NIB_CONF_DNS
+#define GNRC_IPV6_NIB_CONF_DNS          (0)
+#endif
+
+/**
  * @brief   Multihop prefix and 6LoWPAN context distribution
  *
  * @see [RFC 6775, section 8.1](https://tools.ietf.org/html/rfc6775#section-8.1)
  */
 #ifndef GNRC_IPV6_NIB_CONF_MULTIHOP_P6C
-#if GNRC_IPV6_NIB_CONF_6LN
+#if GNRC_IPV6_NIB_CONF_6LR
 #define GNRC_IPV6_NIB_CONF_MULTIHOP_P6C (1)
 #else
 #define GNRC_IPV6_NIB_CONF_MULTIHOP_P6C (0)
@@ -201,6 +218,15 @@ extern "C" {
  */
 #ifndef GNRC_IPV6_NIB_CONF_REACH_TIME_RESET
 #define GNRC_IPV6_NIB_CONF_REACH_TIME_RESET (7200000U)
+#endif
+
+/**
+ * @brief   Disable router solicitations
+ *
+ * @warning Only do this if you know what you're doing
+ */
+#ifndef GNRC_IPV6_NIB_CONF_NO_RTR_SOL
+#define GNRC_IPV6_NIB_CONF_NO_RTR_SOL       (0)
 #endif
 
 /**

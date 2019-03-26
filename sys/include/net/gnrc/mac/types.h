@@ -25,7 +25,7 @@
 #include <stdbool.h>
 
 #include "kernel_types.h"
-#include "net/gnrc.h"
+#include "net/gnrc/pkt.h"
 #include "net/gnrc/priority_pktqueue.h"
 #include "net/ieee802154.h"
 #include "net/gnrc/mac/mac.h"
@@ -38,6 +38,13 @@
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+/**
+ * @brief   MAC message type for getting radio's duty-cycle.
+ */
+#ifndef GNRC_MAC_TYPE_GET_DUTYCYCLE
+#define GNRC_MAC_TYPE_GET_DUTYCYCLE      (0x4401)
 #endif
 
 /**

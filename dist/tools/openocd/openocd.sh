@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Unified OpenOCD script for RIOT
 #
@@ -17,30 +17,33 @@
 #
 # The script supports the following actions:
 #
-# flash:        flash a given ELF file to the target.
+# flash:        flash <image_file>
+#               flash given file to the target.
 #
 #               options:
-#               IMAGE_FILE: Filename of the file that will be flashed
+#               <image_file>:   Filename of the file that will be flashed
 #               PRE_FLASH_CHECK_SCRIPT: a command to run before flashing to
-#               verify the integrity of the image to be flashed. ELFFILE is
+#               verify the integrity of the image to be flashed. <image_file> is
 #               passed as a command line argument to this command.
-#               Even though the file name variable is named ELFFILE, flashing
-#               works with any file format recognized by OpenOCD (elf, ihex, s19, bin).
 #
-# debug:        starts OpenOCD as GDB server in the background and
+#               Flashing works with any file format recognized by OpenOCD
+#               (elf, ihex, s19, bin).
+#
+# debug:        debug <elfile>
+#               starts OpenOCD as GDB server in the background and
 #               connects to the server with the GDB client specified by
 #               the board
 #
 #               options:
+#               <elffile>:      path to the file to debug, must be in a format
+#                               recognized by GDB (preferably ELF, it will not
+#                               work with .bin, .hex or .s19 because they lack
+#                               symbol information)
 #               GDB_PORT:       port opened for GDB connections
 #               TCL_PORT:       port opened for TCL connections
 #               TELNET_PORT:    port opened for telnet connections
 #               DBG:            debugger client command, default: 'gdb -q'
 #               TUI:            if TUI!=null, the -tui option will be used
-#               ELFFILE:        path to the file to debug, must be in a format
-#                               recognized by GDB (preferably ELF, it will not
-#                               work with .bin, .hex or .s19 because they lack
-#                               symbol information)
 #
 # debug-server: starts OpenOCD as GDB server, but does not connect to
 #               to it with any frontend. This might be useful when using
@@ -83,16 +86,18 @@
 # Debugger flags, will be passed to sh -c, remember to escape any quotation signs.
 # Use ${DBG_DEFAULT_FLAGS} to insert the default flags anywhere in the string
 : ${DBG_FLAGS:=${DBG_DEFAULT_FLAGS} ${DBG_EXTRA_FLAGS}}
+# Initial target state when using debug, by default a 'halt' request is sent to
+# the target when starting a debug session. 'reset halt' can also be used
+# depending on the type of target.
+: ${OPENOCD_DBG_START_CMD:=-c 'halt'}
+# command used to reset the board
+: ${OPENOCD_CMD_RESET_RUN:="-c 'reset run'"}
 # This is an optional offset to the base address that can be used to flash an
 # image in a different location than it is linked at. This feature can be useful
 # when flashing images for firmware swapping/remapping boot loaders.
 # Default offset is 0, meaning the image will be flashed at the address that it
 # was linked at.
 : ${IMAGE_OFFSET:=0}
-# Image file used for flashing. Must be in a format that OpenOCD can handle (ELF,
-# Intel hex, S19, or raw binary)
-# Default is to use $ELFFILE
-: ${IMAGE_FILE:=${ELFFILE}}
 # Type of image, leave empty to let OpenOCD automatically detect the type from
 # the file (default).
 # Valid values: elf, hex, s19, bin (see OpenOCD manual for more information)
@@ -141,10 +146,72 @@ test_imagefile() {
     fi
 }
 
+_has_bin_extension() {
+    # The regex need to be without quotes
+    local firmware=$1
+    [[ "${firmware}" =~ ^.*\.bin$ ]]
+}
+
+# Return 0 if given file should be considered a binary
+_is_binfile() {
+    local firmware="$1"
+    local firmware_type="$2"
+    [[ "${firmware_type}" = "bin" ]] || { \
+        [[ -z "${firmware_type}" ]] && _has_bin_extension "${firmware}"; }
+}
+
+# Split bank info on different lines without the '{}'
+_split_banks() {
+    # Input:
+    #   ...
+    #   {name nrf51 base 0 size 0 bus_width 1 chip_width 1} {name nrf51 base 268439552 size 0 bus_width 1 chip_width 1}
+    #   ...
+    #
+    # Output:
+    #   name nrf51 base 0 size 0 bus_width 1 chip_width 1
+    #   name nrf51 base 268439552 size 0 bus_width 1 chip_width 1
+
+    # The following command needs specific osx handling (non gnu):
+    # * Same commands for a pattern should be on different lines
+    # * Cannot use '\n' in the replacement string
+    local sed_escaped_newline=\\$'\n'
+
+    sed -n '
+    /^{.*}$/ {
+        s/\} /\}'"${sed_escaped_newline}"'/g
+        s/[{}]//g
+        p
+    }'
+}
+
+# Outputs bank info on different lines without the '{}'
+_flash_list() {
+    # Openocd output for 'flash list' is
+    # ....
+    # {name nrf51 base 0 size 0 bus_width 1 chip_width 1} {name nrf51 base 268439552 size 0 bus_width 1 chip_width 1}
+    # ....
+    sh -c "${OPENOCD} \
+            ${OPENOCD_ADAPTER_INIT} \
+            -f '${OPENOCD_CONFIG}' \
+            -c 'flash list' \
+            -c 'shutdown'" 2>&1 | _split_banks
+}
+
+# Print flash address for 'bank_num' num defaults to 1
+# _flash_address  [bank_num:1]
+_flash_address() {
+    bank_num=${1:-1}
+
+    # extract 'base' value and print as hexadecimal
+    # name nrf51 base 268439552 size 0 bus_width 1 chip_width 1
+    _flash_list | awk "NR==${bank_num}"'{printf "0x%08x\n", $4}'
+}
+
 #
 # now comes the actual actions
 #
 do_flash() {
+    IMAGE_FILE=$1
     test_config
     test_imagefile
     if [ -n "${PRE_FLASH_CHECK_SCRIPT}" ]; then
@@ -155,6 +222,21 @@ do_flash() {
             exit $RETVAL
         fi
     fi
+
+    # In case of binary file, IMAGE_OFFSET should include the flash base address
+    # This allows flashing normal binary files without env configuration
+    if _is_binfile "${IMAGE_FILE}" "${IMAGE_TYPE}"; then
+        # hardwritten to use the first bank
+        FLASH_ADDR=$(_flash_address 1)
+        echo "Binfile detected, adding ROM base address: ${FLASH_ADDR}"
+        IMAGE_TYPE=bin
+        IMAGE_OFFSET=$(printf "0x%08x\n" "$((${IMAGE_OFFSET} + ${FLASH_ADDR}))")
+    fi
+
+    if [ "${IMAGE_OFFSET}" != "0" ]; then
+        echo "Flashing with IMAGE_OFFSET: ${IMAGE_OFFSET}"
+    fi
+
     # flash device
     sh -c "${OPENOCD} \
             ${OPENOCD_ADAPTER_INIT} \
@@ -169,13 +251,14 @@ do_flash() {
             ${OPENOCD_PRE_FLASH_CMDS} \
             -c 'flash write_image erase \"${IMAGE_FILE}\" ${IMAGE_OFFSET} ${IMAGE_TYPE}' \
             ${OPENOCD_PRE_VERIFY_CMDS} \
-            -c 'verify_image \"${IMAGE_FILE}\"' \
+            -c 'verify_image \"${IMAGE_FILE}\" ${IMAGE_OFFSET}' \
             -c 'reset run' \
             -c 'shutdown'" &&
     echo 'Done flashing'
 }
 
 do_debug() {
+    ELFFILE=$1
     test_config
     test_elffile
     # temporary file that saves OpenOCD pid
@@ -201,7 +284,7 @@ do_debug() {
             -c 'gdb_port ${GDB_PORT}' \
             -c 'init' \
             -c 'targets' \
-            -c 'halt' \
+            ${OPENOCD_DBG_START_CMD} \
             -l /dev/null & \
             echo \$! > $OCD_PIDFILE" &
     # Export to be able to access these from the sh -c command lines, may be
@@ -242,7 +325,7 @@ do_reset() {
             -c 'telnet_port 0' \
             -c 'gdb_port 0' \
             -c 'init' \
-            -c 'reset run' \
+            ${OPENOCD_CMD_RESET_RUN} \
             -c 'shutdown'"
 }
 
@@ -250,15 +333,16 @@ do_reset() {
 # parameter dispatching
 #
 ACTION="$1"
+shift # pop $1 from $@
 
 case "${ACTION}" in
   flash)
     echo "### Flashing Target ###"
-    do_flash
+    do_flash "$@"
     ;;
   debug)
     echo "### Starting Debugging ###"
-    do_debug
+    do_debug "$@"
     ;;
   debug-server)
     echo "### Starting GDB Server ###"
@@ -270,6 +354,8 @@ case "${ACTION}" in
     ;;
   *)
     echo "Usage: $0 {flash|debug|debug-server|reset}"
+    echo "          flash <flashfile>"
+    echo "          debug <elffile>"
     exit 2
     ;;
 esac

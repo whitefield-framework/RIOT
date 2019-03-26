@@ -10,7 +10,6 @@ BOARD_WHITELIST := stm32f4discovery
 # user application.
 FEATURES_REQUIRED = periph_dac periph_spi
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-make.py
+include $(RIOTBASE)/Makefile.include

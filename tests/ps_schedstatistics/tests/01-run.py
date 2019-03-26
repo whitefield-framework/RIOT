@@ -6,8 +6,8 @@
 # General Public License v2.1. See the file LICENSE in the top level
 # directory for more details.
 
-import os
 import sys
+from testrunner import run
 
 PS_EXPECTED = (
     ('\tpid | name                 | state    Q | pri | stack  ( used) | '
@@ -39,6 +39,8 @@ def _check_startup(child):
 
 
 def _check_help(child):
+    child.sendline('')
+    child.expect('>')
     child.sendline('help')
     child.expect_exact('Command              Description')
     child.expect_exact('---------------------------------------')
@@ -60,6 +62,4 @@ def testfunc(child):
 
 
 if __name__ == "__main__":
-    sys.path.append(os.path.join(os.environ['RIOTBASE'], 'dist/tools/testrunner'))
-    from testrunner import run
     sys.exit(run(testfunc))

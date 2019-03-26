@@ -8,13 +8,13 @@
  */
 
 /**
- * @defgroup    core_sync Synchronization
+ * @defgroup    core_sync_mutex Mutex
+ * @ingroup     core_sync
  * @brief       Mutex for thread synchronization
- * @ingroup     core
  * @{
  *
  * @file
- * @brief       RIOT synchronization API
+ * @brief       Mutex for thread synchronization
  *
  * @author      Kaspar Schleiser <kaspar@schleiser.de>
  */
@@ -58,7 +58,7 @@ typedef struct {
  * @brief This is the value of the mutex when locked and no threads are waiting
  *        for it
  */
-#define MUTEX_LOCKED ((void *)-1)
+#define MUTEX_LOCKED ((list_node_t *)-1)
 /**
  * @endcond
  */

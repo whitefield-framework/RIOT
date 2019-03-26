@@ -2,7 +2,6 @@ include ../Makefile.tests_common
 
 USEMODULE += xtimer
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+include $(RIOTBASE)/Makefile.include

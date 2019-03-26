@@ -19,6 +19,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "net/ipv6/addr.h"
 #include "net/gnrc.h"
@@ -67,11 +68,13 @@ static const struct {
     { "iphc", NETOPT_6LO_IPHC },
     { "preload", NETOPT_PRELOADING },
     { "promisc", NETOPT_PROMISCUOUSMODE },
+    { "phy_busy", NETOPT_PHY_BUSY },
     { "raw", NETOPT_RAWMODE },
     { "rtr_adv", NETOPT_IPV6_SND_RTR_ADV },
     { "iq_invert", NETOPT_IQ_INVERT },
     { "rx_single", NETOPT_SINGLE_RECEIVE },
-    { "chan_hop", NETOPT_CHANNEL_HOP }
+    { "chan_hop", NETOPT_CHANNEL_HOP },
+    { "checksum", NETOPT_CHECKSUM },
 };
 
 /* utility functions */
@@ -150,6 +153,7 @@ static void _set_usage(char *cmd_name)
          "       * \"freq\" - sets the \"channel\" center frequency\n"
          "       * \"channel\" - sets the frequency channel\n"
          "       * \"chan\" - alias for \"channel\"\n"
+         "       * \"checksum\" - set checksumming on-off\n"
          "       * \"csma_retries\" - set max. number of channel access attempts\n"
          "       * \"encrypt\" - set the encryption on-off\n"
          "       * \"hop_limit\" - set hop limit\n"
@@ -160,6 +164,7 @@ static void _set_usage(char *cmd_name)
          "       * \"page\" - set the channel page (IEEE 802.15.4)\n"
          "       * \"pan\" - alias for \"nid\"\n"
          "       * \"pan_id\" - alias for \"nid\"\n"
+         "       * \"phy_busy\" - set busy mode on-off\n"
          "       * \"bw\" - alias for channel bandwidth\n"
          "       * \"sf\" - alias for spreading factor\n"
          "       * \"cr\" - alias for coding rate\n"
@@ -229,10 +234,10 @@ static void _print_netopt(netopt_t opt)
             break;
 
         case NETOPT_HOP_LIMIT:
-            printf("MTU");
+            printf("hop limit");
             break;
 
-        case NETOPT_MAX_PACKET_SIZE:
+        case NETOPT_MAX_PDU_SIZE:
             printf("MTU");
             break;
 
@@ -274,6 +279,14 @@ static void _print_netopt(netopt_t opt)
 
         case NETOPT_CODING_RATE:
             printf("coding rate");
+            break;
+
+        case NETOPT_CHECKSUM:
+            printf("checksum");
+            break;
+
+        case NETOPT_PHY_BUSY:
+            printf("PHY busy");
             break;
 
         default:
@@ -349,16 +362,22 @@ static void _netif_list_ipv6(ipv6_addr_t *addr, uint8_t flags)
     if (flags & GNRC_NETIF_IPV6_ADDRS_FLAGS_ANYCAST) {
         printf(" [anycast]");
     }
-    switch (flags & GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_MASK) {
-        case GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_TENTATIVE:
-            printf("  TNT");
-            break;
-        case GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_DEPRECATED:
-            printf("  DPR");
-            break;
-        case GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_VALID:
-            printf("  VAL");
-            break;
+    if (flags & GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_TENTATIVE) {
+        printf("  TNT[%u]",
+               flags & GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_TENTATIVE);
+    }
+    else {
+        switch (flags & GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_MASK) {
+            case GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_DEPRECATED:
+                printf("  DPR");
+                break;
+            case GNRC_NETIF_IPV6_ADDRS_FLAGS_STATE_VALID:
+                printf("  VAL");
+                break;
+            default:
+                printf("  UNK");
+                break;
+        }
     }
     line_thresh = _newline(0U, line_thresh);
 }
@@ -426,6 +445,10 @@ static void _netif_list(kernel_pid_t iface)
     if (res >= 0) {
         printf(" CR: %s ", _netopt_coding_rate_str[u8]);
     }
+    res = gnrc_netapi_get(iface, NETOPT_LINK_CONNECTED, 0, &u8, sizeof(u8));
+    if (res >= 0) {
+        printf(" Link: %s ", (netopt_enable_t)u8 ? "up" : "down" );
+    }
     line_thresh = _newline(0U, line_thresh);
     res = gnrc_netapi_get(iface, NETOPT_ADDRESS_LONG, 0, hwaddr, sizeof(hwaddr));
     if (res >= 0) {
@@ -482,8 +505,13 @@ static void _netif_list(kernel_pid_t iface)
                                    line_thresh);
     line_thresh = _netif_list_flag(iface, NETOPT_CHANNEL_HOP, "CHAN_HOP",
                                    line_thresh);
+    res = gnrc_netapi_get(iface, NETOPT_MAX_PDU_SIZE, 0, &u16, sizeof(u16));
+    if (res > 0) {
+        printf("L2-PDU:%" PRIu16 " ", u16);
+        line_thresh++;
+    }
 #ifdef MODULE_GNRC_IPV6
-    res = gnrc_netapi_get(iface, NETOPT_MAX_PACKET_SIZE, GNRC_NETTYPE_IPV6, &u16, sizeof(u16));
+    res = gnrc_netapi_get(iface, NETOPT_MAX_PDU_SIZE, GNRC_NETTYPE_IPV6, &u16, sizeof(u16));
     if (res > 0) {
         printf("MTU:%" PRIu16 "  ", u16);
         line_thresh++;
@@ -500,6 +528,9 @@ static void _netif_list(kernel_pid_t iface)
 #endif
     line_thresh = _netif_list_flag(iface, NETOPT_IPV6_SND_RTR_ADV, "RTR_ADV  ",
                                    line_thresh);
+#ifdef MODULE_GNRC_SIXLOWPAN
+    line_thresh = _netif_list_flag(iface, NETOPT_6LO, "6LO  ", line_thresh);
+#endif
 #ifdef MODULE_GNRC_SIXLOWPAN_IPHC
     line_thresh += _LINE_THRESHOLD + 1; /* enforce linebreak after this option */
     line_thresh = _netif_list_flag(iface, NETOPT_6LO_IPHC, "IPHC  ",
@@ -1009,7 +1040,7 @@ static int _netif_set(char *cmd_name, kernel_pid_t iface, char *key, char *value
     }
 #ifdef MODULE_GNRC_IPV6
     else if (strcmp("mtu", key) == 0) {
-        return _netif_set_u16(iface, NETOPT_MAX_PACKET_SIZE, GNRC_NETTYPE_IPV6,
+        return _netif_set_u16(iface, NETOPT_MAX_PDU_SIZE, GNRC_NETTYPE_IPV6,
                               value);
     }
 #endif

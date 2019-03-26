@@ -61,6 +61,11 @@ extern "C" {
 #define TIMER_CHAN          (4U)
 
 /**
+ * @brief   All STM QDEC timers have 2 capture channels
+ */
+#define QDEC_CHAN           (2U)
+
+/**
  * @brief   Use the shared SPI functions
  * @{
  */
@@ -70,12 +75,29 @@ extern "C" {
 /** @} */
 
 /**
+ * @name    PM definitions
+ * @{
+ */
+/**
  * @brief   Number of usable low power modes
  */
-#if defined(CPU_FAM_STM32F1) || defined(CPU_FAM_STM32F2) \
-    || defined(CPU_FAM_STM32F4) || defined(DOXYGEN)
 #define PM_NUM_MODES    (2U)
+
+/**
+ * @name    Power modes
+ * @{
+ */
+#define STM32_PM_STOP         (1U)
+#define STM32_PM_STANDBY      (0U)
+/** @} */
+
+#ifndef PM_EWUP_CONFIG
+/**
+ * @brief   Wake-up pins configuration (CSR register)
+ */
+#define PM_EWUP_CONFIG          (0U)
 #endif
+/** @} */
 
 /**
  * @brief   Available peripheral buses
@@ -83,6 +105,9 @@ extern "C" {
 typedef enum {
     APB1,           /**< APB1 bus */
     APB2,           /**< APB2 bus */
+#if defined(CPU_FAM_STM32L4)
+    APB12,          /**< AHB1 bus, second register */
+#endif
 #if defined(CPU_FAM_STM32L0)
     AHB,            /**< AHB bus */
     IOP,            /**< IOP bus */
@@ -134,6 +159,21 @@ typedef uint32_t gpio_t;
  * detect the usage of non-valid lines by comparing to SPI_HWCS_VALID.
  */
 #define SPI_HWCS(x)         (SPI_HWCS_MASK | x)
+
+/**
+ * @name    Use the shared I2C functions
+ * @{
+ */
+/** Use read reg function from periph common */
+#define PERIPH_I2C_NEED_READ_REG
+/** Use write reg function from periph common */
+#define PERIPH_I2C_NEED_WRITE_REG
+#define PERIPH_I2C_NEED_READ_REGS
+#if defined(CPU_FAM_STM32F1) || defined(CPU_FAM_STM32F2) || \
+    defined(CPU_FAM_STM32L1) || defined(CPU_FAM_STM32F4)
+#define PERIPH_I2C_NEED_WRITE_REGS
+#endif
+/** @} */
 
 /**
  * @brief   Available MUX values for configuring a pin's alternate function
@@ -205,6 +245,71 @@ typedef enum {
 #endif /* ndef DOXYGEN */
 #endif /* ndef CPU_FAM_STM32F1 */
 
+#ifdef MODULE_PERIPH_DMA
+/**
+ * @brief   DMA configuration
+ */
+typedef struct {
+    /** DMA stream on stm32f2/4/7, channel on others
+     * STM32F2/4/7:
+     *  - 0: DMA1 / Stream0
+     *  - 1: DMA1 / Stream1
+     *  - ...
+     *  - 7: DMA1 / Stream7
+     *  - 8: DAM2 / Stream0
+     *  - ...
+     *  - 15: DMA2 / Stream7
+     * STM32F0/1/L0/1/4:
+     *  - 0: DMA1 / Channel1
+     *  - ...
+     *  - 4: DMA1 / Channel5
+     *  - ...
+     *  - 6: DMA1 / Channel7
+     *  - 7: Reserved
+     *  - 8: DMA2 / Channel1
+     *  - ...
+     *  - 12: DMA2 / Channel5
+     *  - ...
+     *  - 14: DMA2 / Channel7
+     */
+    int stream;
+} dma_conf_t;
+
+/**
+ * @brief   DMA type
+ */
+typedef unsigned dma_t;
+
+/**
+ * @brief   DMA modes
+ */
+typedef enum {
+    DMA_PERIPH_TO_MEM,     /**< Peripheral to memory */
+    DMA_MEM_TO_PERIPH,     /**< Memory to peripheral */
+    DMA_MEM_TO_MEM,        /**< Memory to memory */
+} dma_mode_t;
+
+/**
+ * @name    DMA Increment modes
+ * @{
+ */
+#define DMA_INC_SRC_ADDR  (0x01)
+#define DMA_INC_DST_ADDR  (0x02)
+#define DMA_INC_BOTH_ADDR (DMA_INC_SRC_ADDR | DMA_INC_DST_ADDR)
+/** @} */
+
+/**
+ * @name    DMA data width
+ * @{
+ */
+#define DMA_DATA_WIDTH_BYTE      (0x00)
+#define DMA_DATA_WIDTH_HALF_WORD (0x04)
+#define DMA_DATA_WIDTH_WORD      (0x08)
+#define DMA_DATA_WIDTH_MASK      (0x0C)
+#define DMA_DATA_WIDTH_SHIFT     (2)
+/** @} */
+#endif /* MODULE_PERIPH_DMA */
+
 /**
  * @brief   DAC line configuration data
  */
@@ -245,6 +350,88 @@ typedef struct {
 } pwm_conf_t;
 
 /**
+ * @brief   QDEC channel
+ */
+typedef struct {
+    gpio_t pin;             /**< GPIO pin mapped to this channel */
+    uint8_t cc_chan;        /**< capture compare channel used */
+} qdec_chan_t;
+
+/**
+ * @brief   QDEC configuration
+ */
+typedef struct {
+    TIM_TypeDef *dev;               /**< Timer used */
+    uint32_t max;                   /**< Maximum counter value */
+    uint32_t rcc_mask;              /**< bit in clock enable register */
+    qdec_chan_t chan[QDEC_CHAN];    /**< channel mapping, set to {GPIO_UNDEF, 0}
+                                     *   if not used */
+    gpio_af_t af;                   /**< alternate function used */
+    uint8_t bus;                    /**< APB bus */
+    uint8_t irqn;                   /**< global IRQ channel */
+} qdec_conf_t;
+
+/**
+ * @brief UART hardware module types
+ */
+typedef enum {
+    STM32_USART,            /**< STM32 USART module type */
+    STM32_LPUART,           /**< STM32 Low-power UART (LPUART) module type */
+} uart_type_t;
+
+#ifndef DOXYGEN
+/**
+ * @brief   Invalid UART mode mask
+ *
+ * This mask is also used to force data_bits_t to be uint32_t type
+ * since it may be assigned a uint32_t variable in uart_mode
+ */
+#define UART_INVALID_MODE   (0x8000000)
+
+/**
+ * @brief   Override parity values
+ * @{
+ */
+#define HAVE_UART_PARITY_T
+typedef enum {
+   UART_PARITY_NONE = 0,                               /**< no parity */
+   UART_PARITY_EVEN = USART_CR1_PCE,                   /**< even parity */
+   UART_PARITY_ODD = (USART_CR1_PCE | USART_CR1_PS),   /**< odd parity */
+   UART_PARITY_MARK = UART_INVALID_MODE | 4,           /**< not supported */
+   UART_PARITY_SPACE = UART_INVALID_MODE  | 5          /**< not supported */
+} uart_parity_t;
+/** @} */
+
+/**
+ * @brief   Override data bits length values
+ * @{
+ */
+#define HAVE_UART_DATA_BITS_T
+typedef enum {
+    UART_DATA_BITS_5 = UART_INVALID_MODE | 1,   /**< not supported */
+    UART_DATA_BITS_6 = UART_INVALID_MODE | 2,   /**< not supported unless parity is set */
+#if defined(USART_CR1_M1)
+    UART_DATA_BITS_7 = USART_CR1_M1,            /**< 7 data bits */
+#else
+    UART_DATA_BITS_7 = UART_INVALID_MODE | 3,   /**< not supported unless parity is set */
+#endif
+    UART_DATA_BITS_8 = 0,                       /**< 8 data bits */
+} uart_data_bits_t;
+/** @} */
+
+/**
+ * @brief   Override stop bits length values
+ * @{
+ */
+#define HAVE_UART_STOP_BITS_T
+typedef enum {
+   UART_STOP_BITS_1 = 0,                  /**< 1 stop bit */
+   UART_STOP_BITS_2 = USART_CR2_STOP_1,   /**< 2 stop bits */
+} uart_stop_bits_t;
+/** @} */
+#endif /* ndef DOXYGEN */
+
+/**
  * @brief   Structure for UART configuration data
  */
 typedef struct {
@@ -258,10 +445,6 @@ typedef struct {
 #endif
     uint8_t bus;            /**< APB bus */
     uint8_t irqn;           /**< IRQ channel */
-#if 0 /* TODO */
-    uint8_t dma_stream;     /**< DMA stream used for TX */
-    uint8_t dma_chan;       /**< DMA channel used for TX */
-#endif
 #ifdef MODULE_STM32_PERIPH_UART_HW_FC
     gpio_t cts_pin;         /**< CTS pin - set to GPIO_UNDEF when not using HW flow control */
     gpio_t rts_pin;         /**< RTS pin */
@@ -269,6 +452,14 @@ typedef struct {
     gpio_af_t cts_af;       /**< alternate function for CTS pin */
     gpio_af_t rts_af;       /**< alternate function for RTS pin */
 #endif
+#endif
+#if defined(CPU_FAM_STM32L0) || defined(CPU_FAM_STM32L4)
+    uart_type_t type;       /**< hardware module type (USART or LPUART) */
+    uint32_t clk_src;       /**< clock source used for UART */
+#endif
+#ifdef MODULE_PERIPH_DMA
+    dma_t dma;              /**< Logical DMA stream used for TX */
+    uint8_t dma_chan;       /**< DMA channel used for TX */
 #endif
 } uart_conf_t;
 
@@ -286,7 +477,80 @@ typedef struct {
 #endif
     uint32_t rccmask;       /**< bit in the RCC peripheral enable register */
     uint8_t apbbus;         /**< APBx bus the device is connected to */
+#ifdef MODULE_PERIPH_DMA
+    dma_t tx_dma;           /**< Logical DMA stream used for TX */
+    uint8_t tx_dma_chan;    /**< DMA channel used for TX */
+    dma_t rx_dma;           /**< Logical DMA stream used for RX */
+    uint8_t rx_dma_chan;    /**< DMA channel used for RX */
+#endif
 } spi_conf_t;
+
+/**
+ * @brief   Default mapping of I2C bus speed values
+ * @{
+ */
+#define HAVE_I2C_SPEED_T
+typedef enum {
+#if defined(CPU_FAM_STM32F1) || defined(CPU_FAM_STM32F2) || \
+    defined(CPU_FAM_STM32F4) || defined(CPU_FAM_STM32L1)
+    I2C_SPEED_LOW,          /**< low speed mode: ~10kit/s */
+#endif
+    I2C_SPEED_NORMAL,       /**< normal mode:  ~100kbit/s */
+    I2C_SPEED_FAST,         /**< fast mode:    ~400kbit/s */
+#if defined(CPU_FAM_STM32F0) || defined(CPU_FAM_STM32F3) || \
+    defined(CPU_FAM_STM32F7) || defined(CPU_FAM_STM32L0) || \
+    defined(CPU_FAM_STM32L4)
+    I2C_SPEED_FAST_PLUS,    /**< fast plus mode: ~1Mbit/s */
+#endif
+} i2c_speed_t;
+/** @} */
+
+/**
+ * @brief   Structure for I2C configuration data
+ */
+typedef struct {
+    I2C_TypeDef *dev;       /**< i2c device */
+    i2c_speed_t speed;      /**< i2c bus speed */
+    gpio_t scl_pin;         /**< scl pin number */
+    gpio_t sda_pin;         /**< sda pin number */
+#ifndef CPU_FAM_STM32F1
+    gpio_af_t scl_af;       /**< scl pin alternate function value */
+    gpio_af_t sda_af;       /**< sda pin alternate function value */
+#endif
+    uint8_t bus;            /**< APB bus */
+    uint32_t rcc_mask;      /**< bit in clock enable register */
+#if defined(CPU_FAM_STM32F0) || defined(CPU_FAM_STM32F3)
+    uint32_t rcc_sw_mask;   /**< bit to switch I2C clock */
+#endif
+#if defined(CPU_FAM_STM32F1) || defined(CPU_FAM_STM32F2) || \
+    defined(CPU_FAM_STM32F4) || defined(CPU_FAM_STM32L1)
+    uint32_t clk;           /**< bus frequency as defined in board config */
+#endif
+    uint8_t irqn;           /**< I2C event interrupt number */
+} i2c_conf_t;
+
+#if defined(CPU_FAM_STM32F0) || defined(CPU_FAM_STM32F3) || \
+    defined(CPU_FAM_STM32F7) || defined(CPU_FAM_STM32L0) || \
+    defined(CPU_FAM_STM32L4)
+/**
+ * @brief   Structure for I2C timing register settings
+ *
+ * These parameters are valid for 48MHz (16MHz for L0) input clock.
+ * See reference manual of supported CPU for example of timing settings:
+ * - STM32F030/F070: see RM0360, section 22.4.10, p.560, table 76
+ * - STM32F303: see RM0316, section 28.4.9, p.849, table 148
+ * - STM32F72X: see RM0431, section 26.4.9, p.851, table 149
+ * - STM32L0x2: see RM0376, section 27.4.10, p.686, table 117
+ * - STM32L4X5/6: see RM0351, section 39.4.9, p.1297, table 234
+ */
+typedef struct {
+    uint8_t presc;          /**< Timing prescaler value */
+    uint8_t scll;           /**< SCL Low period */
+    uint8_t sclh;           /**< SCL High period */
+    uint8_t sdadel;         /**< Data hold time */
+    uint8_t scldel;         /**< Data setup time */
+} i2c_timing_param_t;
+#endif
 
 /**
  * @brief   Get the actual bus clock frequency for the APB buses
@@ -336,6 +600,109 @@ void gpio_init_af(gpio_t pin, gpio_af_t af);
  * @param[in] pin       pin to configure
  */
 void gpio_init_analog(gpio_t pin);
+
+#ifdef MODULE_PERIPH_DMA
+/**
+ * @brief   DMA stream not defined
+ */
+#define DMA_STREAM_UNDEF (UINT_MAX)
+
+/**
+ * @brief   Initialize DMA
+ */
+void dma_init(void);
+
+/**
+ * @brief   Execute a DMA transfer
+ *
+ * This function blocks until the transfer is completed. This is a convenience
+ * function which configure, start, wait and stop a DMA transfer.
+ *
+ * @param[in]  dma     logical DMA stream
+ * @param[in]  chan    DMA channel (on stm32f2/4/7, CxS or unused on others)
+ * @param[in]  src     source buffer
+ * @param[out] dst     destination buffer
+ * @param[in]  len     length to transfer
+ * @param[in]  mode    DMA mode
+ * @param[in]  flags   DMA configuration
+ *
+ * @return < 0 on error, the number of transfered bytes otherwise
+ */
+int dma_transfer(dma_t dma, int chan, const volatile void *src, volatile void *dst, size_t len,
+                 dma_mode_t mode, uint8_t flags);
+
+/**
+ * @brief   Acquire a DMA stream
+ *
+ * @param[in] dma     logical DMA stream
+ */
+void dma_acquire(dma_t dma);
+
+/**
+ * @brief   Release a DMA stream
+ *
+ * @param[in] dma     logical DMA stream
+ */
+void dma_release(dma_t dma);
+
+/**
+ * @brief   Start a DMA transfer on a stream
+ *
+ * Start a DMA transfer on a given stream. The stream must be configured first
+ * by a @p dma_configure call.
+ *
+ * @param[in] dma     logical DMA stream
+ */
+void dma_start(dma_t dma);
+
+/**
+ * @brief   Suspend a DMA transfer on a stream
+ *
+ * @param[in] dma     logical DMA stream
+ *
+ * @return the remaining number of bytes to transfer
+ */
+uint16_t dma_suspend(dma_t dma);
+
+/**
+ * @brief   Resume a suspended DMA transfer on a stream
+ *
+ * @param[in] dma         logical DMA stream
+ * @param[in] reamaining  the remaining number of bytes to transfer
+ */
+void dma_resume(dma_t dma, uint16_t remaining);
+
+/**
+ * @brief   Stop a DMA transfer on a stream
+ *
+ * @param[in] dma     logical DMA stream
+ */
+void dma_stop(dma_t dma);
+
+/**
+ * @brief   Wait for the end of a transfer
+ *
+ * @param[in] dma     logical DMA stream
+ */
+void dma_wait(dma_t dma);
+
+/**
+ * @brief   Configure a DMA stream for a new transfer
+ *
+ * @param[in]  dma     logical DMA stream
+ * @param[in]  chan    DMA channel (on stm32f2/4/7, CxS or unused on others)
+ * @param[in]  src     source buffer
+ * @param[out] dst     destination buffer
+ * @param[in]  len     length to transfer
+ * @param[in]  mode    DMA mode
+ * @param[in]  flags   DMA configuration
+ *
+ * @return < 0 on error, 0 on success
+ */
+int dma_configure(dma_t dma, int chan, const volatile void *src, volatile void *dst, size_t len,
+                  dma_mode_t mode, uint8_t flags);
+
+#endif /* MODULE_PERIPH_DMA */
 
 #ifdef __cplusplus
 }

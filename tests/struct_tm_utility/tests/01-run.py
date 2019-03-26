@@ -6,10 +6,10 @@
 # General Public License v2.1. See the file LICENSE in the top level
 # directory for more details.
 
-import os
 import sys
 import calendar
 import datetime
+from testrunner import run
 
 
 def _check_help(child):
@@ -105,7 +105,13 @@ def _check_day(child):
                        'but no error should occur.')
 
 
+def _wait_prompt(child):
+    child.sendline('')
+    child.expect('>')
+
+
 def testfunc(child):
+    _wait_prompt(child)
     _check_help(child)
     _check_days_in(child)
     _check_leap_year(child)
@@ -114,6 +120,4 @@ def testfunc(child):
 
 
 if __name__ == "__main__":
-    sys.path.append(os.path.join(os.environ['RIOTBASE'], 'dist/tools/testrunner'))
-    from testrunner import run
     sys.exit(run(testfunc))

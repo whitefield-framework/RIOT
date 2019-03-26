@@ -1,10 +1,13 @@
 include ../Makefile.tests_common
 
-BOARD_INSUFFICIENT_MEMORY := chronos msb-430 msb-430h nucleo32-f031 nucleo32-f042 \
-                             nucleo32-f303 nucleo32-l031 nucleo-f030 nucleo-f070 \
-                             nucleo-f072 nucleo-f302 nucleo-f303 nucleo-f334 \
-                             nucleo-l053 stm32f0discovery telosb wsn430-v1_3b \
-                             wsn430-v1_4 z1
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-mega2560 arduino-nano \
+                             arduino-uno chronos hifive1 msb-430 msb-430h \
+                             nucleo-f031k6 nucleo-f042k6 nucleo-f303k8 \
+                             nucleo-l031k6 nucleo-f030r8 nucleo-f070rb \
+                             nucleo-f072rb nucleo-f302r8 nucleo-f303re \
+                             nucleo-f334r8 nucleo-l053r8 saml10-xpro \
+                             saml11-xpro stm32f0discovery telosb waspmote-pro \
+                             wsn430-v1_3b wsn430-v1_4 z1
 
 CFLAGS += -DLOG_LEVEL=LOG_ALL
 

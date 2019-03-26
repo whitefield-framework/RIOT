@@ -7,7 +7,7 @@
  */
 
 /**
-  * @ingroup sys_newlib
+  * @ingroup    sys_newlib
   * @{
   *
   * @file
@@ -69,11 +69,8 @@ void _exit(int n)
 {
     exit(n);
 
-    /*
-     * Disable unreachableCode cppcheck as pm_off spins indefinately after
-     * pulling the plug
-     */
-    /* cppcheck-suppress unreachableCode */
+    /* cppcheck-suppress unreachableCode
+     * (reason: pm_off spins indefinately after pulling the plug) */
     pm_off();
 }
 

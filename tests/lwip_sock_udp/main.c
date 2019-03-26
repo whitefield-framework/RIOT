@@ -85,10 +85,10 @@ static void test_sock_udp_create4__EINVAL_netif(void)
     static const sock_udp_ep_t local = { .family = AF_INET, .netif = _TEST_NETIF,
                                          .port = _TEST_PORT_LOCAL };
     /* port may not be NULL according to doc */
-    const sock_udp_ep_t remote = { .family = AF_INET,
-                                   .netif = (_TEST_NETIF + 1),
-                                   .port = _TEST_PORT_REMOTE,
-                                   .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) } };
+    static const sock_udp_ep_t remote = { .family = AF_INET,
+                                          .netif = (_TEST_NETIF + 1),
+                                          .port = _TEST_PORT_REMOTE,
+                                          .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE } };
 
     assert(-EINVAL == sock_udp_create(&_sock, &local, &remote, SOCK_FLAGS_REUSE_EP));
 }
@@ -117,6 +117,21 @@ static void test_sock_udp_create4__only_local(void)
     assert(-ENOTCONN == sock_udp_get_remote(&_sock, &ep));
 }
 
+static void test_sock_udp_create4__only_local_port0(void)
+{
+    static const sock_udp_ep_t local = { .family = AF_INET,
+                                         .port = 0U };
+    sock_udp_ep_t ep;
+
+    assert(0 == sock_udp_create(&_sock, &local, NULL, SOCK_FLAGS_REUSE_EP));
+    assert(0 == sock_udp_get_local(&_sock, &ep));
+    assert(AF_INET == ep.family);
+    assert(0 == ep.addr.ipv4_u32);
+    assert(SOCK_ADDR_ANY_NETIF == ep.netif);
+    assert(0U != ep.port);
+    assert(-ENOTCONN == sock_udp_get_remote(&_sock, &ep));
+}
+
 static void test_sock_udp_create4__only_local_reuse_ep(void)
 {
     static const sock_udp_ep_t local = { .family = AF_INET,
@@ -142,9 +157,9 @@ static void test_sock_udp_create4__only_local_reuse_ep(void)
 
 static void test_sock_udp_create4__only_remote(void)
 {
-    const sock_udp_ep_t remote = { .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE,
-                                   .addr =  { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) } };
+    static const sock_udp_ep_t remote = { .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE,
+                                          .addr =  { .ipv4_u32 = _TEST_ADDR4_REMOTE } };
     sock_udp_ep_t ep;
 
     assert(0 == sock_udp_create(&_sock, NULL, &remote, SOCK_FLAGS_REUSE_EP));
@@ -152,7 +167,7 @@ static void test_sock_udp_create4__only_remote(void)
     assert(0 == sock_udp_get_local(&_sock, &ep));
     assert(0 == sock_udp_get_remote(&_sock, &ep));
     assert(AF_INET == ep.family);
-    assert(htonl(_TEST_ADDR4_REMOTE) == ep.addr.ipv4_u32);
+    assert(_TEST_ADDR4_REMOTE == ep.addr.ipv4_u32);
     assert(SOCK_ADDR_ANY_NETIF == ep.netif);
     assert(_TEST_PORT_REMOTE == ep.port);
 }
@@ -161,9 +176,9 @@ static void test_sock_udp_create4__full(void)
 {
     static const sock_udp_ep_t local = { .family = AF_INET, .netif = _TEST_NETIF,
                                          .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE,
-                                   .addr =  { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) } };
+    static const sock_udp_ep_t remote = { .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE,
+                                          .addr =  { .ipv4_u32 = _TEST_ADDR4_REMOTE } };
     sock_udp_ep_t ep;
 
     assert(0 == sock_udp_create(&_sock, &local, &remote, SOCK_FLAGS_REUSE_EP));
@@ -175,7 +190,7 @@ static void test_sock_udp_create4__full(void)
     assert(_TEST_PORT_LOCAL == ep.port);
     assert(0 == sock_udp_get_remote(&_sock, &ep));
     assert(AF_INET == ep.family);
-    assert(htonl(_TEST_ADDR4_REMOTE) == ep.addr.ipv4_u32);
+    assert(_TEST_ADDR4_REMOTE == ep.addr.ipv4_u32);
     assert(SOCK_ADDR_ANY_NETIF == ep.netif);
     assert(_TEST_PORT_REMOTE == ep.port);
 }
@@ -231,9 +246,9 @@ static void test_sock_udp_recv4__socketed(void)
 {
     static const sock_udp_ep_t local = { .family = AF_INET,
                                          .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, &local, &remote, SOCK_FLAGS_REUSE_EP));
     assert(_inject_4packet(_TEST_ADDR4_REMOTE, _TEST_ADDR4_LOCAL, _TEST_PORT_REMOTE,
@@ -249,9 +264,9 @@ static void test_sock_udp_recv4__socketed_with_remote(void)
 {
     static const sock_udp_ep_t local = { .family = AF_INET,
                                          .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
     sock_udp_ep_t result;
 
     assert(0 == sock_udp_create(&_sock, &local, &remote, SOCK_FLAGS_REUSE_EP));
@@ -262,7 +277,7 @@ static void test_sock_udp_recv4__socketed_with_remote(void)
                                            sizeof(_test_buffer),
                                            SOCK_NO_TIMEOUT, &result));
     assert(AF_INET == result.family);
-    assert(htonl(_TEST_ADDR4_REMOTE) == result.addr.ipv4_u32);
+    assert(_TEST_ADDR4_REMOTE == result.addr.ipv4_u32);
     assert(_TEST_PORT_REMOTE == result.port);
 #if LWIP_NETBUF_RECVINFO
     assert(_TEST_NETIF == result.netif);
@@ -272,9 +287,9 @@ static void test_sock_udp_recv4__socketed_with_remote(void)
 
 static void test_sock_udp_recv4__unsocketed(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .port = _TEST_PORT_LOCAL };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .port = _TEST_PORT_LOCAL };
 
     assert(0 == sock_udp_create(&_sock, &local, NULL, SOCK_FLAGS_REUSE_EP));
     assert(_inject_4packet(_TEST_ADDR4_REMOTE, _TEST_ADDR4_LOCAL, _TEST_PORT_REMOTE,
@@ -300,7 +315,7 @@ static void test_sock_udp_recv4__unsocketed_with_remote(void)
                                            sizeof(_test_buffer),
                                            SOCK_NO_TIMEOUT, &result));
     assert(AF_INET == result.family);
-    assert(htonl(_TEST_ADDR4_REMOTE) == result.addr.ipv4_u32);
+    assert(_TEST_ADDR4_REMOTE == result.addr.ipv4_u32);
     assert(_TEST_PORT_REMOTE == result.port);
 #if LWIP_NETBUF_RECVINFO
     assert(_TEST_NETIF == result.netif);
@@ -322,7 +337,7 @@ static void test_sock_udp_recv4__with_timeout(void)
                                            sizeof(_test_buffer), _TEST_TIMEOUT,
                                            &result));
     assert(AF_INET == result.family);
-    assert(htonl(_TEST_ADDR4_REMOTE) == result.addr.ipv4_u32);
+    assert(_TEST_ADDR4_REMOTE == result.addr.ipv4_u32);
     assert(_TEST_PORT_REMOTE == result.port);
 #if LWIP_NETBUF_RECVINFO
     assert(_TEST_NETIF == result.netif);
@@ -343,7 +358,7 @@ static void test_sock_udp_recv4__non_blocking(void)
     assert(sizeof("ABCD") == sock_udp_recv(&_sock, _test_buffer,
                                            sizeof(_test_buffer), 0, &result));
     assert(AF_INET == result.family);
-    assert(htonl(_TEST_ADDR4_REMOTE) == result.addr.ipv4_u32);
+    assert(_TEST_ADDR4_REMOTE == result.addr.ipv4_u32);
     assert(_TEST_PORT_REMOTE == result.port);
 #if LWIP_NETBUF_RECVINFO
     assert(_TEST_NETIF == result.netif);
@@ -353,9 +368,9 @@ static void test_sock_udp_recv4__non_blocking(void)
 
 static void test_sock_udp_send4__EAFNOSUPPORT(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_UNSPEC,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_UNSPEC,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(-EAFNOSUPPORT == sock_udp_send(NULL, "ABCD", sizeof("ABCD"),
                                           &remote));
@@ -364,10 +379,10 @@ static void test_sock_udp_send4__EAFNOSUPPORT(void)
 
 static void test_sock_udp_send4__EINVAL_addr(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .port = _TEST_PORT_REMOTE,
-                                  .netif = _TEST_NETIF };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .port = _TEST_PORT_REMOTE,
+                                         .netif = _TEST_NETIF };
     static const sock_udp_ep_t remote = { .family = AF_INET,
                                           .port = _TEST_PORT_REMOTE,
                                           .netif = _TEST_NETIF };
@@ -379,14 +394,14 @@ static void test_sock_udp_send4__EINVAL_addr(void)
 
 static void test_sock_udp_send4__EINVAL_netif(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .port = _TEST_PORT_REMOTE,
-                                  .netif = _TEST_NETIF };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE,
-                                   .netif = _TEST_NETIF + 1 };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .port = _TEST_PORT_REMOTE,
+                                         .netif = _TEST_NETIF };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE,
+                                          .netif = _TEST_NETIF + 1 };
 
     assert(0 == sock_udp_create(&_sock, &local, NULL, SOCK_FLAGS_REUSE_EP));
     assert(-EINVAL == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"), &remote));
@@ -395,9 +410,9 @@ static void test_sock_udp_send4__EINVAL_netif(void)
 
 static void test_sock_udp_send4__EHOSTUNREACH(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_WRONG) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_WRONG },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(-EHOSTUNREACH == sock_udp_send(NULL, "ABCD", sizeof("ABCD"),
                                           &remote));
@@ -405,8 +420,8 @@ static void test_sock_udp_send4__EHOSTUNREACH(void)
 
 static void test_sock_udp_send4__EINVAL_port(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET };
 
     assert(-EINVAL == sock_udp_send(NULL, "ABCD", sizeof("ABCD"), &remote));
     assert(_check_net());
@@ -421,9 +436,9 @@ static void test_sock_udp_send4__ENOTCONN(void)
 
 static void test_sock_udp_send4__socketed_no_local_no_netif(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, NULL, &remote, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -436,12 +451,12 @@ static void test_sock_udp_send4__socketed_no_local_no_netif(void)
 
 static void test_sock_udp_send4__socketed_no_netif(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .port = _TEST_PORT_LOCAL };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, &local, &remote, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -455,10 +470,10 @@ static void test_sock_udp_send4__socketed_no_netif(void)
 
 static void test_sock_udp_send4__socketed_no_local(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .netif = _TEST_NETIF,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .netif = _TEST_NETIF,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, NULL, &remote, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -472,13 +487,13 @@ static void test_sock_udp_send4__socketed_no_local(void)
 
 static void test_sock_udp_send4__socketed(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .netif = _TEST_NETIF,
-                                  .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .netif = _TEST_NETIF,
+                                         .port = _TEST_PORT_LOCAL };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, &local, &remote, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -492,16 +507,16 @@ static void test_sock_udp_send4__socketed(void)
 
 static void test_sock_udp_send4__socketed_other_remote(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .netif = _TEST_NETIF,
-                                  .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t sock_remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_WRONG) },
-                                        .family = AF_INET,
-                                        .port = _TEST_PORT_REMOTE + _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .netif = _TEST_NETIF,
+                                         .port = _TEST_PORT_LOCAL };
+    static const sock_udp_ep_t sock_remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_WRONG },
+                                               .family = AF_INET,
+                                               .port = _TEST_PORT_REMOTE + _TEST_PORT_LOCAL };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, &local, &sock_remote, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -515,9 +530,9 @@ static void test_sock_udp_send4__socketed_other_remote(void)
 
 static void test_sock_udp_send4__unsocketed_no_local_no_netif(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, NULL, NULL, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -531,12 +546,12 @@ static void test_sock_udp_send4__unsocketed_no_local_no_netif(void)
 
 static void test_sock_udp_send4__unsocketed_no_netif(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .port = _TEST_PORT_LOCAL };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, &local, NULL, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -550,10 +565,10 @@ static void test_sock_udp_send4__unsocketed_no_netif(void)
 
 static void test_sock_udp_send4__unsocketed_no_local(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .netif = _TEST_NETIF,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .netif = _TEST_NETIF,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, NULL, NULL, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -567,13 +582,13 @@ static void test_sock_udp_send4__unsocketed_no_local(void)
 
 static void test_sock_udp_send4__unsocketed(void)
 {
-    const sock_udp_ep_t local = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_LOCAL) },
-                                  .family = AF_INET,
-                                  .netif = _TEST_NETIF,
-                                  .port = _TEST_PORT_LOCAL };
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t local = { .addr = { .ipv4_u32 = _TEST_ADDR4_LOCAL },
+                                         .family = AF_INET,
+                                         .netif = _TEST_NETIF,
+                                         .port = _TEST_PORT_LOCAL };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(0 == sock_udp_create(&_sock, &local, NULL, SOCK_FLAGS_REUSE_EP));
     assert(sizeof("ABCD") == sock_udp_send(&_sock, "ABCD", sizeof("ABCD"),
@@ -587,9 +602,9 @@ static void test_sock_udp_send4__unsocketed(void)
 
 static void test_sock_udp_send4__no_sock_no_netif(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(sizeof("ABCD") == sock_udp_send(NULL, "ABCD", sizeof("ABCD"),
                                            &remote));
@@ -602,10 +617,10 @@ static void test_sock_udp_send4__no_sock_no_netif(void)
 
 static void test_sock_udp_send4__no_sock(void)
 {
-    const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = htonl(_TEST_ADDR4_REMOTE) },
-                                   .family = AF_INET,
-                                   .netif = _TEST_NETIF,
-                                   .port = _TEST_PORT_REMOTE };
+    static const sock_udp_ep_t remote = { .addr = { .ipv4_u32 = _TEST_ADDR4_REMOTE },
+                                          .family = AF_INET,
+                                          .netif = _TEST_NETIF,
+                                          .port = _TEST_PORT_REMOTE };
 
     assert(sizeof("ABCD") == sock_udp_send(NULL, "ABCD", sizeof("ABCD"),
                                            &remote));
@@ -691,6 +706,22 @@ static void test_sock_udp_create6__only_local(void)
                   sizeof(ipv6_addr_t)) == 0);
     assert(SOCK_ADDR_ANY_NETIF == ep.netif);
     assert(_TEST_PORT_LOCAL == ep.port);
+    assert(-ENOTCONN == sock_udp_get_remote(&_sock, &ep));
+}
+
+static void test_sock_udp_create6__only_local_port0(void)
+{
+    static const sock_udp_ep_t local = { .family = AF_INET6,
+                                         .port = 0U };
+    sock_udp_ep_t ep;
+
+    assert(0 == sock_udp_create(&_sock, &local, NULL, SOCK_FLAGS_REUSE_EP));
+    assert(0 == sock_udp_get_local(&_sock, &ep));
+    assert(AF_INET6 == ep.family);
+    assert(memcmp(&ipv6_addr_unspecified, &ep.addr.ipv6,
+                  sizeof(ipv6_addr_t)) == 0);
+    assert(SOCK_ADDR_ANY_NETIF == ep.netif);
+    assert(0U != ep.port);
     assert(-ENOTCONN == sock_udp_get_remote(&_sock, &ep));
 }
 
@@ -1256,6 +1287,7 @@ int main(void)
     CALL(test_sock_udp_create4__EINVAL_netif());
     CALL(test_sock_udp_create4__no_endpoints());
     CALL(test_sock_udp_create4__only_local());
+    CALL(test_sock_udp_create4__only_local_port0());
     CALL(test_sock_udp_create4__only_local_reuse_ep());
     CALL(test_sock_udp_create4__only_remote());
     CALL(test_sock_udp_create4__full());
@@ -1301,6 +1333,7 @@ int main(void)
     CALL(test_sock_udp_create6__EINVAL_netif());
     CALL(test_sock_udp_create6__no_endpoints());
     CALL(test_sock_udp_create6__only_local());
+    CALL(test_sock_udp_create6__only_local_port0());
     CALL(test_sock_udp_create6__only_local_reuse_ep());
     CALL(test_sock_udp_create6__only_remote());
     CALL(test_sock_udp_create6__full());

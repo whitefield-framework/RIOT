@@ -20,6 +20,7 @@
 #define RBUF_H
 
 #include <inttypes.h>
+#include <stdbool.h>
 
 #include "net/gnrc/netif/hdr.h"
 #include "net/gnrc/pkt.h"
@@ -30,7 +31,6 @@
 extern "C" {
 #endif
 
-#define RBUF_L2ADDR_MAX_LEN (8U)               /**< maximum length for link-layer addresses */
 #define RBUF_SIZE           (4U)               /**< size of the reassembly buffer */
 #define RBUF_TIMEOUT        (3U * US_PER_SEC) /**< timeout for reassembly in microseconds */
 
@@ -53,34 +53,19 @@ typedef struct rbuf_int {
 } rbuf_int_t;
 
 /**
- * @brief   An entry in the 6LoWPAN reassembly buffer.
+ * @brief   Internal representation of the 6LoWPAN reassembly buffer.
  *
- * @details A receipient of a fragment SHALL use
- *
- * 1. the source address,
- * 2. the destination address,
- * 3. the datagram size (gnrc_pktsnip_t::size of rbuf_t::pkt), and
- * 4. the datagram tag
- *
- * to identify all fragments that belong to the given datagram.
- *
- * @see <a href="https://tools.ietf.org/html/rfc4944#section-5.3">
- *          RFC 4944, section 5.3
- *      </a>
+ * Additional members help with correct reassembly of the buffer.
  *
  * @internal
+ *
+ * @extends gnrc_sixlowpan_rbuf_t
  */
 typedef struct {
+    gnrc_sixlowpan_rbuf_t super;        /**< exposed part of the reassembly buffer */
     rbuf_int_t *ints;                   /**< intervals of the fragment */
-    gnrc_pktsnip_t *pkt;                /**< the reassembled packet in packet buffer */
     uint32_t arrival;                   /**< time in microseconds of arrival of
                                          *   last received fragment */
-    uint8_t src[RBUF_L2ADDR_MAX_LEN];   /**< source address */
-    uint8_t dst[RBUF_L2ADDR_MAX_LEN];   /**< destination address */
-    uint8_t src_len;                    /**< length of source address */
-    uint8_t dst_len;                    /**< length of destination address */
-    uint16_t tag;                       /**< the datagram's tag */
-    uint16_t cur_size;                  /**< the datagram's current size */
 } rbuf_t;
 
 /**
@@ -92,13 +77,44 @@ typedef struct {
  *                          gnrc_netif_hdr_t::if_pid and its source and
  *                          destination address set.
  * @param[in] frag          The fragment to add.
- * @param[in] frag_size     The fragment's size.
  * @param[in] offset        The fragment's offset.
+ * @param[in] page          Current 6Lo dispatch parsing page.
  *
  * @internal
  */
 void rbuf_add(gnrc_netif_hdr_t *netif_hdr, gnrc_pktsnip_t *frag,
-              size_t frag_size, size_t offset);
+              size_t offset, unsigned page);
+
+/**
+ * @brief   Checks timeouts and removes entries if necessary
+ */
+void rbuf_gc(void);
+
+void rbuf_rm(rbuf_t *rbuf);
+
+static inline bool rbuf_entry_empty(const rbuf_t *rbuf) {
+    return (rbuf->super.pkt == NULL);
+}
+
+#if defined(TEST_SUITES) || defined(DOXYGEN)
+/**
+ * @brief   Resets the packet buffer to a clean state
+ *
+ * @note    Only available when @ref TEST_SUITES is defined
+ */
+void rbuf_reset(void);
+
+/**
+ * @brief   Returns a pointer to the array representing the reassembly buffer.
+ *
+ * @note    Only available when @ref TEST_SUITES is defined
+ *
+ * @return  The first element of the reassembly buffer. `const`, so that write
+ *          access is immediately spotted at compile time of tests. The `const`
+ *          qualifier may however be discarded if required by the tests.
+ */
+const rbuf_t *rbuf_array(void);
+#endif
 
 #ifdef __cplusplus
 }

@@ -34,17 +34,17 @@
 
 #ifndef KINETIS_HAVE_LPUART
 #ifdef LPUART0
-#define KINETIS_HAVE_LPUART      1
+#define KINETIS_HAVE_LPUART     1
 #else
-#define KINETIS_HAVE_LPUART      0
+#define KINETIS_HAVE_LPUART     0
 #endif
 #endif /* KINETIS_HAVE_LPUART */
 
 #ifndef KINETIS_HAVE_UART
 #ifdef UART0
-#define KINETIS_HAVE_UART      1
+#define KINETIS_HAVE_UART       1
 #else
-#define KINETIS_HAVE_UART      0
+#define KINETIS_HAVE_UART       0
 #endif
 #endif /* KINETIS_HAVE_LPUART */
 
@@ -54,13 +54,27 @@
  * using the BRFA field in the UART C4 register.
  */
 #ifdef UART_C4_BRFA
-#define KINETIS_UART_ADVANCED    1
+#define KINETIS_UART_ADVANCED   1
 #endif
 #endif
 
-#ifndef LPUART_OVERSAMPLING_RATE
-/* Use 16x oversampling by default (hardware defaults) */
-#define LPUART_OVERSAMPLING_RATE (16)
+#ifndef LPUART_OVERSAMPLING_RATE_MIN
+/* Use 10x oversampling at minimum, this will be iterated to achieve a better
+ * baud rate match than otherwise possible with a fixed oversampling rate */
+/* Hardware reset default value is an oversampling rate of 16 */
+#define LPUART_OVERSAMPLING_RATE_MIN (10)
+#endif
+#ifndef LPUART_OVERSAMPLING_RATE_MAX
+#define LPUART_OVERSAMPLING_RATE_MAX (32)
+#endif
+
+/* Default LPUART clock setting to avoid compilation failures, define this in
+ * periph_conf.h to set board specific configuration if using the LPUART. */
+#ifndef LPUART_0_SRC
+#define LPUART_0_SRC            0
+#endif
+#ifndef LPUART_1_SRC
+#define LPUART_1_SRC            0
 #endif
 
 /**
@@ -120,6 +134,18 @@ int uart_init(uart_t uart, uint32_t baudrate, uart_rx_cb_t rx_cb, void *arg)
             return UART_NODEV;
     }
     return UART_OK;
+}
+
+void uart_poweron(uart_t uart)
+{
+    (void)uart;
+    /* not implemented (yet) */
+}
+
+void uart_poweroff(uart_t uart)
+{
+    (void)uart;
+    /* not implemented (yet) */
 }
 
 #if KINETIS_HAVE_UART && KINETIS_HAVE_LPUART
@@ -221,6 +247,8 @@ KINETIS_UART_WRITE_INLINE void uart_write_uart(uart_t uart, const uint8_t *data,
     }
 }
 
+#if defined(UART_0_ISR) || defined(UART_1_ISR) || defined(UART_2_ISR) || \
+    defined(UART_3_ISR) || defined(UART_4_ISR)
 static inline void irq_handler_uart(uart_t uart)
 {
     UART_Type *dev = uart_config[uart].dev;
@@ -252,6 +280,7 @@ static inline void irq_handler_uart(uart_t uart)
 
     cortexm_isr_end();
 }
+#endif
 
 #ifdef UART_0_ISR
 void UART_0_ISR(void)
@@ -294,19 +323,43 @@ void UART_4_ISR(void)
 static inline void uart_init_lpuart(uart_t uart, uint32_t baudrate)
 {
     LPUART_Type *dev = uart_config[uart].dev;
-    uint32_t clk = uart_config[uart].freq;
 
-    /* Remember to select a module clock in board_init! (SIM->SOPT2[LPUART0SRC]) */
+    /* Set LPUART clock source */
+#ifdef SIM_SOPT2_LPUART0SRC
+    if (dev == LPUART0) {
+        SIM->SOPT2 = (SIM->SOPT2 & ~SIM_SOPT2_LPUART0SRC_MASK) |
+            SIM_SOPT2_LPUART0SRC(LPUART_0_SRC);
+    }
+#endif
+#ifdef SIM_SOPT2_LPUART1SRC
+    if (dev == LPUART1) {
+        SIM->SOPT2 = (SIM->SOPT2 & ~SIM_SOPT2_LPUART1SRC_MASK) |
+            SIM_SOPT2_LPUART1SRC(LPUART_1_SRC);
+    }
+#endif
 
     /* Select mode */
     /* transmitter and receiver disabled */
     dev->CTRL = uart_config[uart].mode;
 
     /* calculate baud rate divisor */
-    uint32_t div = clk / (baudrate * LPUART_OVERSAMPLING_RATE);
+    uint32_t clk = uart_config[uart].freq;
+    uint32_t best_err = baudrate;
+    uint32_t best_osr = LPUART_OVERSAMPLING_RATE_MIN;
+    /* Use the oversampling rate as a baud rate fine adjust tool */
+    for (uint32_t osr = LPUART_OVERSAMPLING_RATE_MIN; osr <= LPUART_OVERSAMPLING_RATE_MAX; ++osr) {
+        uint32_t div = clk / (osr * baudrate);
+        uint32_t actual_baud = clk / (osr * div);
+        uint32_t err = ((actual_baud > baudrate) ? actual_baud - baudrate : baudrate - actual_baud);
+        if (err < best_err) {
+            best_err = err;
+            best_osr = osr;
+        }
+    }
 
+    uint32_t sbr = clk / (best_osr * baudrate);
     /* set baud rate */
-    dev->BAUD = LPUART_BAUD_OSR(LPUART_OVERSAMPLING_RATE - 1) | LPUART_BAUD_SBR(div);
+    dev->BAUD = LPUART_BAUD_OSR(best_osr - 1) | LPUART_BAUD_SBR(sbr);
 
     /* enable transmitter and receiver + RX interrupt */
     dev->CTRL |= LPUART_CTRL_TE_MASK | LPUART_CTRL_RE_MASK | LPUART_CTRL_RIE_MASK;
@@ -325,6 +378,8 @@ KINETIS_UART_WRITE_INLINE void uart_write_lpuart(uart_t uart, const uint8_t *dat
     }
 }
 
+#if defined(LPUART_0_ISR) || defined(LPUART_1_ISR) || defined(LPUART_2_ISR) || \
+    defined(LPUART_3_ISR) || defined(LPUART_4_ISR)
 static inline void irq_handler_lpuart(uart_t uart)
 {
     LPUART_Type *dev = uart_config[uart].dev;
@@ -361,6 +416,7 @@ static inline void irq_handler_lpuart(uart_t uart)
 
     cortexm_isr_end();
 }
+#endif
 
 #ifdef LPUART_0_ISR
 void LPUART_0_ISR(void)

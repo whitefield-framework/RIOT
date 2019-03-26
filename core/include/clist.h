@@ -8,7 +8,7 @@
  */
 
 /**
- * @addtogroup  core_util
+ * @ingroup     core_util
  * @{
  *
  * @file
@@ -21,9 +21,12 @@
  * operation            | runtime | description
  * ---------------------|---------|---------------
  * clist_lpush()        | O(1)    | insert as head (leftmost node)
+ * clist_lpeek()        | O(1)    | get the head without removing it
  * clist_lpop()         | O(1)    | remove and return head (leftmost node)
  * clist_rpush()        | O(1)    | append as tail (rightmost node)
+ * clist_rpeek()        | O(1)    | get the tail without removing it
  * clist_rpop()         | O(n)    | remove and return tail (rightmost node)
+ * clist_lpoprpush()    | O(1)    | move first element to the end of the list
  * clist_find()         | O(n)    | find and return node
  * clist_find_before()  | O(n)    | find node return node pointing to node
  * clist_remove()       | O(n)    | remove and return node
@@ -325,24 +328,28 @@ static inline clist_node_t *clist_remove(clist_node_t *list, clist_node_t *node)
  * The pointer supplied by @p arg will be passed to every call to @p func.
  *
  * If @p func returns non-zero, traversal will be aborted like when calling
- * break within a for loop.
+ * break within a for loop, returning the corresponding node.
  *
  * @param[in]       list        List to traverse.
  * @param[in]       func        Function to call for each member.
  * @param[in]       arg         Pointer to pass to every call to @p func
+ *
+ * @returns         NULL on empty list or full traversal
+ * @returns         node that caused @p func(node, arg) to exit non-zero
  */
-static inline void clist_foreach(clist_node_t *list, int(*func)(clist_node_t *, void *), void *arg)
+static inline clist_node_t *clist_foreach(clist_node_t *list, int(*func)(clist_node_t *, void *), void *arg)
 {
     clist_node_t *node = list->next;
-    if (! node) {
-        return;
+    if (node) {
+        do {
+            node = node->next;
+            if (func(node, arg)) {
+                return node;
+            }
+        } while (node != list->next);
     }
-    do {
-        node = node->next;
-        if (func(node, arg)) {
-            return;
-        }
-    } while (node != list->next);
+
+    return NULL;
 }
 
 /**

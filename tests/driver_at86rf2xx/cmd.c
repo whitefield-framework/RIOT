@@ -35,7 +35,6 @@ static int send(int iface, le_uint16_t dst_pan, uint8_t *dst_addr,
 int ifconfig_list(int idx)
 {
     int res;
-    uint8_t array_val[_MAX_ADDR_LEN];
     netdev_ieee802154_t *dev = (netdev_ieee802154_t *)(&devs[idx]);
 
     int (*get)(netdev_t *, netopt_t, void *, size_t) = dev->netdev.driver->get;
@@ -62,20 +61,13 @@ int ifconfig_list(int idx)
     }
     printf(", Source address length: %u", (unsigned)u16_val);
 
-    res = get((netdev_t *)dev, NETOPT_MAX_PACKET_SIZE, &u16_val,
+    res = get((netdev_t *)dev, NETOPT_MAX_PDU_SIZE, &u16_val,
               sizeof(u16_val));
     if (res < 0) {
         puts("(err)");
         return 1;
     }
     printf(", Max.Payload: %u", (unsigned)u16_val);
-
-    res = get((netdev_t *)dev, NETOPT_IPV6_IID, array_val, sizeof(array_val));
-    if (res > 0) {
-        printf("\n           IPv6 IID: ");
-        print_addr(array_val, res);
-    }
-
     printf("\n           Channel: %u", dev->chan);
 
     res = get((netdev_t *)dev, NETOPT_CHANNEL_PAGE, &u16_val, sizeof(u16_val));
@@ -250,7 +242,6 @@ static int send(int iface, le_uint16_t dst_pan, uint8_t *dst, size_t dst_len,
 {
     int res;
     netdev_ieee802154_t *dev;
-    struct iovec vector[MAC_VECTOR_SIZE];
     uint8_t *src;
     size_t src_len;
     uint8_t mhr[IEEE802154_MAX_HDR_LEN];
@@ -262,11 +253,14 @@ static int send(int iface, le_uint16_t dst_pan, uint8_t *dst, size_t dst_len,
         return 1;
     }
 
+    iolist_t iol_data = {
+        .iol_base = data,
+        .iol_len = strlen(data)
+    };
+
     dev = (netdev_ieee802154_t *)&devs[iface];
     flags = (uint8_t)(dev->flags & NETDEV_IEEE802154_SEND_MASK);
     flags |= IEEE802154_FCF_TYPE_DATA;
-    vector[1].iov_base = data;
-    vector[1].iov_len = strlen(data);
     src_pan = byteorder_btols(byteorder_htons(dev->pan));
     if (dst_pan.u16 == 0) {
         dst_pan = src_pan;
@@ -287,15 +281,20 @@ static int send(int iface, le_uint16_t dst_pan, uint8_t *dst, size_t dst_len,
         puts("txtsnd: Error preperaring frame");
         return 1;
     }
-    vector[0].iov_base = mhr;
-    vector[0].iov_len = (size_t)res;
-    res = dev->netdev.driver->send((netdev_t *)dev, vector, MAC_VECTOR_SIZE);
+
+    iolist_t iol_hdr = {
+        .iol_next = &iol_data,
+        .iol_base = mhr,
+        .iol_len = (size_t)res
+    };
+
+    res = dev->netdev.driver->send((netdev_t *)dev, &iol_hdr);
     if (res < 0) {
         puts("txtsnd: Error on sending");
         return 1;
     }
     else {
-        printf("txtsnd: send %u bytes to ", (unsigned)vector[1].iov_len);
+        printf("txtsnd: send %u bytes to ", (unsigned)iol_data.iol_len);
         print_addr(dst, dst_len);
         printf(" (PAN: ");
         print_addr((uint8_t *)&dst_pan, sizeof(dst_pan));

@@ -20,41 +20,12 @@
 #define PERIPH_CONF_H
 
 #include "periph_cpu.h"
+#include "f4/cfg_clock_168_16_0.h"
+#include "cfg_spi_divtable.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * @name    Clock settings
- *
- * @note    This is auto-generated from
- *          `cpu/stm32_common/dist/clk_conf/clk_conf.c`
- * @{
- */
-/* give the target core clock (HCLK) frequency [in Hz],
- * maximum: 168MHz */
-#define CLOCK_CORECLOCK     (168000000U)
-/* 0: no external high speed crystal available
- * else: actual crystal frequency [in Hz] */
-#define CLOCK_HSE           (16000000U)
-/* 0: no external low speed crystal available,
- * 1: external crystal available (always 32.768kHz) */
-#define CLOCK_LSE           (0)
-/* peripheral clock setup */
-#define CLOCK_AHB_DIV       RCC_CFGR_HPRE_DIV1
-#define CLOCK_AHB           (CLOCK_CORECLOCK / 1)
-#define CLOCK_APB1_DIV      RCC_CFGR_PPRE1_DIV4     /* max 42MHz */
-#define CLOCK_APB1          (CLOCK_CORECLOCK / 4)
-#define CLOCK_APB2_DIV      RCC_CFGR_PPRE2_DIV2     /* max 84MHz */
-#define CLOCK_APB2          (CLOCK_CORECLOCK / 2)
-
-/* Main PLL factors */
-#define CLOCK_PLL_M          (8)
-#define CLOCK_PLL_N          (168)
-#define CLOCK_PLL_P          (2)
-#define CLOCK_PLL_Q          (7)
-/** @} */
 
 /**
  * @name    Timer configuration
@@ -193,28 +164,8 @@ static const uart_conf_t uart_config[] = {
 
 /**
  * @name    SPI configuration
- *
- * @note    The spi_divtable is auto-generated from
- *          `cpu/stm32_common/dist/spi_divtable/spi_divtable.c`
  * @{
  */
-static const uint8_t spi_divtable[2][5] = {
-    {       /* for APB1 @ 42000000Hz */
-        7,  /* -> 164062Hz */
-        6,  /* -> 328125Hz */
-        4,  /* -> 1312500Hz */
-        2,  /* -> 5250000Hz */
-        1   /* -> 10500000Hz */
-    },
-    {       /* for APB2 @ 84000000Hz */
-        7,  /* -> 328125Hz */
-        7,  /* -> 328125Hz */
-        5,  /* -> 1312500Hz */
-        3,  /* -> 5250000Hz */
-        2   /* -> 10500000Hz */
-    }
-};
-
 static const spi_conf_t spi_config[] = {
     {
         .dev      = SPI1,
@@ -235,28 +186,25 @@ static const spi_conf_t spi_config[] = {
  * @name    I2C configuration
  * @{
  */
-#define I2C_NUMOF           (1U)
-#define I2C_0_EN            1
-#define I2C_IRQ_PRIO        1
-#define I2C_APBCLK          (CLOCK_APB1)
+static const i2c_conf_t i2c_config[] = {
+    {
+        .dev            = I2C1,
+        .speed          = I2C_SPEED_NORMAL,
+        .scl_pin        = GPIO_PIN(PORT_B, 6),
+        .sda_pin        = GPIO_PIN(PORT_B, 7),
+        .scl_af         = GPIO_AF4,
+        .sda_af         = GPIO_AF4,
+        .bus            = APB1,
+        .rcc_mask       = RCC_APB1ENR_I2C1EN,
+        .clk            = CLOCK_APB1,
+        .irqn           = I2C1_EV_IRQn
+    }
+};
 
-/* I2C 0 device configuration */
-#define I2C_0_DEV           I2C1
-#define I2C_0_CLKEN()       (periph_clk_en(APB1, RCC_APB1ENR_I2C1EN))
-#define I2C_0_CLKDIS()      (periph_clk_dis(APB1, RCC_APB1ENR_I2C1EN))
-#define I2C_0_EVT_IRQ       I2C1_EV_IRQn
-#define I2C_0_EVT_ISR       isr_i2c1_ev
-#define I2C_0_ERR_IRQ       I2C1_ER_IRQn
-#define I2C_0_ERR_ISR       isr_i2c1_er
-/* I2C 0 pin configuration */
-#define I2C_0_SCL_PORT      GPIOB
-#define I2C_0_SCL_PIN       6
-#define I2C_0_SCL_AF        4
-#define I2C_0_SCL_CLKEN()   (periph_clk_en(AHB1, RCC_AHB1ENR_GPIOBEN))
-#define I2C_0_SDA_PORT      GPIOB
-#define I2C_0_SDA_PIN       7
-#define I2C_0_SDA_AF        4
-#define I2C_0_SDA_CLKEN()   (periph_clk_en(AHB1, RCC_AHB1ENR_GPIOBEN))
+#define I2C_0_ISR           isr_i2c1_ev
+
+#define I2C_NUMOF           (sizeof(i2c_config) / sizeof(i2c_config[0]))
+/** @} */
 
 #ifdef __cplusplus
 }

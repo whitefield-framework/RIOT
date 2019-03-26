@@ -13,6 +13,8 @@
  * @author  Martine Lenders <m.lenders@fu-berlin.de>
  */
 
+#include <string.h>
+
 #include "net/gnrc/icmpv6.h"
 #include "net/gnrc/ipv6.h"
 #include "net/gnrc/netif/internal.h"
@@ -218,6 +220,27 @@ gnrc_pktsnip_t *gnrc_ndp_opt_mtu_build(uint32_t mtu, gnrc_pktsnip_t *next)
 
         mtu_opt->resv.u16 = 0;
         mtu_opt->mtu = byteorder_htonl(mtu);
+    }
+    return pkt;
+}
+
+gnrc_pktsnip_t *gnrc_ndp_opt_rdnss_build(uint32_t ltime, ipv6_addr_t *addrs,
+                                         unsigned addrs_num,
+                                         gnrc_pktsnip_t *next)
+{
+    assert(addrs != NULL);
+    assert(addrs_num > 0);
+    size_t opt_size = sizeof(ndp_opt_t) + (sizeof(ipv6_addr_t) * addrs_num);
+    gnrc_pktsnip_t *pkt = gnrc_ndp_opt_build(NDP_OPT_RDNSS, opt_size, next);
+
+    if (pkt != NULL) {
+        ndp_opt_rdnss_t *rdnss_opt = pkt->data;
+        rdnss_opt->resv.u16 = 0;
+        rdnss_opt->ltime = byteorder_htonl(ltime);
+        for (unsigned i = 0; i < addrs_num; i++) {
+            memcpy(&rdnss_opt->addrs[i], &addrs[i],
+                   sizeof(rdnss_opt->addrs[i]));
+        }
     }
     return pkt;
 }
@@ -475,6 +498,11 @@ void gnrc_ndp_rtr_adv_send(gnrc_netif_t *netif, const ipv6_addr_t *src,
             /* get address from source selection algorithm.
              * Only link local addresses may be used (RFC 4861 section 4.1) */
             src = gnrc_netif_ipv6_addr_best_src(netif, dst, true);
+
+            if (src == NULL) {
+                DEBUG("ndp rtr: no VALID source address found for RA\n");
+                break;
+            }
         }
         /* add SL2A for source address */
         if (src != NULL) {
@@ -500,6 +528,9 @@ void gnrc_ndp_rtr_adv_send(gnrc_netif_t *netif, const ipv6_addr_t *src,
         if (netif->flags & GNRC_NETIF_FLAGS_IPV6_ADV_CUR_HL) {
             cur_hl = netif->cur_hl;
         }
+#if GNRC_IPV6_NIB_CONF_ARSM
+        /* netif->ipv6.reach_time_base is only available with Address Resolution
+         * State Machine */
         if (netif->flags & GNRC_NETIF_FLAGS_IPV6_ADV_REACH_TIME) {
             if (netif->ipv6.reach_time_base > (3600 * MS_PER_SEC)) {
                 /* reach_time > 1 hour */
@@ -509,6 +540,7 @@ void gnrc_ndp_rtr_adv_send(gnrc_netif_t *netif, const ipv6_addr_t *src,
                 reach_time = netif->ipv6.reach_time_base;
             }
         }
+#endif /* GNRC_IPV6_NIB_CONF_ARSM */
         if (netif->flags & GNRC_NETIF_FLAGS_IPV6_ADV_RETRANS_TIMER) {
             retrans_timer = netif->ipv6.retrans_time;
         }

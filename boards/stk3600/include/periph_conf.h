@@ -21,9 +21,7 @@
 #define PERIPH_CONF_H
 
 #include "cpu.h"
-
 #include "periph_cpu.h"
-
 #include "em_cmu.h"
 
 #ifdef __cplusplus
@@ -117,7 +115,8 @@ static const i2c_conf_t i2c_config[] = {
         .scl_pin = GPIO_PIN(PD, 7),
         .loc = I2C_ROUTE_LOCATION_LOC1,
         .cmu = cmuClock_I2C0,
-        .irq = I2C0_IRQn
+        .irq = I2C0_IRQn,
+        .speed = I2C_SPEED_NORMAL
     },
     {
         .dev = I2C1,
@@ -125,7 +124,8 @@ static const i2c_conf_t i2c_config[] = {
         .scl_pin = GPIO_PIN(PC, 5),
         .loc = I2C_ROUTE_LOCATION_LOC0,
         .cmu = cmuClock_I2C1,
-        .irq = I2C1_IRQn
+        .irq = I2C1_IRQn,
+        .speed = I2C_SPEED_NORMAL
     }
 };
 
@@ -161,9 +161,11 @@ static const pwm_conf_t pwm_config[] = {
 /** @} */
 
 /**
- * @brief   RTC configuration
+ * @name    RTC configuration
+ * @{
  */
 #define RTC_NUMOF           (1U)
+/** @} */
 
 /**
  * @name    RTT configuration
@@ -237,6 +239,9 @@ static const uart_conf_t uart_config[] = {
         .rx_pin = GPIO_PIN(PE, 1),
         .tx_pin = GPIO_PIN(PE, 0),
         .loc = UART_ROUTE_LOCATION_LOC1,
+#if EFM32_UART_MODES
+        .mode = UART_MODE_8N1,
+#endif
         .cmu = cmuClock_UART0,
         .irq = UART0_RX_IRQn
     },
@@ -245,6 +250,9 @@ static const uart_conf_t uart_config[] = {
         .rx_pin = GPIO_PIN(PD, 1),
         .tx_pin = GPIO_PIN(PD, 0),
         .loc = USART_ROUTE_LOCATION_LOC1,
+#if EFM32_UART_MODES
+        .mode = UART_MODE_8N1,
+#endif
         .cmu = cmuClock_USART1,
         .irq = USART1_RX_IRQn
     },
@@ -253,6 +261,9 @@ static const uart_conf_t uart_config[] = {
         .rx_pin = GPIO_PIN(PD, 5),
         .tx_pin = GPIO_PIN(PD, 4),
         .loc = LEUART_ROUTE_LOCATION_LOC0,
+#if EFM32_UART_MODES
+        .mode = UART_MODE_8N1,
+#endif
         .cmu = cmuClock_LEUART0,
         .irq = LEUART0_IRQn
     }

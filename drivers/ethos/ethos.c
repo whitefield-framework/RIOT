@@ -34,9 +34,9 @@
 #include "net/ethernet.h"
 
 #ifdef USE_ETHOS_FOR_STDIO
-#include "uart_stdio.h"
+#include "stdio_uart.h"
 #include "isrpipe.h"
-extern isrpipe_t uart_stdio_isrpipe;
+extern isrpipe_t stdio_uart_isrpipe;
 #endif
 
 #define ENABLE_DEBUG (0)
@@ -58,6 +58,7 @@ void ethos_setup(ethos_t *dev, const ethos_params_t *params)
     dev->framesize = 0;
     dev->frametype = 0;
     dev->last_framesize = 0;
+    dev->accept_new = true;
 
     tsrb_init(&dev->inbuf, (char*)params->buf, params->bufsize);
     mutex_init(&dev->out_mutex);
@@ -82,6 +83,7 @@ static void _reset_state(ethos_t *dev)
     dev->state = WAIT_FRAMESTART;
     dev->frametype = 0;
     dev->framesize = 0;
+    dev->accept_new = true;
 }
 
 static void _handle_char(ethos_t *dev, char c)
@@ -90,9 +92,12 @@ static void _handle_char(ethos_t *dev, char c)
         case ETHOS_FRAME_TYPE_DATA:
         case ETHOS_FRAME_TYPE_HELLO:
         case ETHOS_FRAME_TYPE_HELLO_REPLY:
-             if (tsrb_add_one(&dev->inbuf, c) == 0) {
-                dev->framesize++;
-            } else {
+            if (dev->accept_new) {
+                if (tsrb_add_one(&dev->inbuf, c) == 0) {
+                    dev->framesize++;
+                }
+            }
+            else {
                 //puts("lost frame");
                 dev->inbuf.reads = 0;
                 dev->inbuf.writes = 0;
@@ -102,7 +107,7 @@ static void _handle_char(ethos_t *dev, char c)
 #ifdef USE_ETHOS_FOR_STDIO
         case ETHOS_FRAME_TYPE_TEXT:
             dev->framesize++;
-            isrpipe_write_one(&uart_stdio_isrpipe, c);
+            isrpipe_write_one(&stdio_uart_isrpipe, c);
 #endif
     }
 }
@@ -112,6 +117,7 @@ static void _end_of_frame(ethos_t *dev)
     switch(dev->frametype) {
         case ETHOS_FRAME_TYPE_DATA:
             if (dev->framesize) {
+                assert(dev->last_framesize == 0);
                 dev->last_framesize = dev->framesize;
                 dev->netdev.event_callback((netdev_t*) dev, NETDEV_EVENT_ISR);
             }
@@ -137,6 +143,9 @@ static void ethos_isr(void *arg, uint8_t c)
         case WAIT_FRAMESTART:
             if (c == ETHOS_FRAME_DELIMITER) {
                 _reset_state(dev);
+                if (dev->last_framesize) {
+                    dev->accept_new = false;
+                }
                 dev->state = IN_FRAME;
             }
             break;
@@ -189,28 +198,27 @@ static int _init(netdev_t *encdev)
     return 0;
 }
 
-static size_t iovec_count_total(const struct iovec *vector, int count)
+static size_t iolist_count_total(const iolist_t *iolist)
 {
     size_t result = 0;
-    while(count--) {
-        result += vector->iov_len;
-        vector++;
+    for (const iolist_t *iol = iolist; iol; iol = iol->iol_next) {
+        result += iol->iol_len;
     }
     return result;
 }
 
 static void _write_escaped(uart_t uart, uint8_t c)
 {
-    uint8_t *out;
+    const uint8_t *out;
     int n;
 
     switch(c) {
         case ETHOS_FRAME_DELIMITER:
-            out = (uint8_t*)_esc_delim;
+            out = _esc_delim;
             n = 2;
             break;
         case ETHOS_ESC_CHAR:
-            out = (uint8_t*)_esc_esc;
+            out = _esc_esc;
             n = 2;
             break;
         default:
@@ -245,7 +253,7 @@ void ethos_send_frame(ethos_t *dev, const uint8_t *data, size_t len, unsigned fr
 
     /* send frame content */
     while(len--) {
-        _write_escaped(dev->uart, *(uint8_t*)data++);
+        _write_escaped(dev->uart, *data++);
     }
 
     /* end of frame */
@@ -256,13 +264,13 @@ void ethos_send_frame(ethos_t *dev, const uint8_t *data, size_t len, unsigned fr
     }
 }
 
-static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count)
+static int _send(netdev_t *netdev, const iolist_t *iolist)
 {
     ethos_t * dev = (ethos_t *) netdev;
     (void)dev;
 
     /* count total packet length */
-    size_t pktlen = iovec_count_total(vector, count);
+    size_t pktlen = iolist_count_total(iolist);
 
     /* lock line in order to prevent multiple writes */
     mutex_lock(&dev->out_mutex);
@@ -271,14 +279,13 @@ static int _send(netdev_t *netdev, const struct iovec *vector, unsigned count)
     uint8_t frame_delim = ETHOS_FRAME_DELIMITER;
     uart_write(dev->uart, &frame_delim, 1);
 
-    /* send iovec */
-    while(count--) {
-        size_t n = vector->iov_len;
-        uint8_t *ptr = vector->iov_base;
+    /* send iolist */
+    for (const iolist_t *iol = iolist; iol; iol = iol->iol_next) {
+        size_t n = iol->iol_len;
+        uint8_t *ptr = iol->iol_base;
         while(n--) {
             _write_escaped(dev->uart, *ptr++);
         }
-        vector++;
     }
 
     uart_write(dev->uart, &frame_delim, 1);
@@ -306,17 +313,25 @@ static int _recv(netdev_t *netdev, void *buf, size_t len, void* info)
         }
 
         len = dev->last_framesize;
-        dev->last_framesize = 0;
 
         if ((tsrb_get(&dev->inbuf, buf, len) != (int)len)) {
             DEBUG("ethos _recv(): inbuf doesn't contain enough bytes.\n");
+            dev->last_framesize = 0;
             return -1;
         }
 
+        dev->last_framesize = 0;
         return (int)len;
     }
     else {
-        return dev->last_framesize;
+        if (len) {
+            int dropsize = dev->last_framesize;
+            dev->last_framesize = 0;
+            return tsrb_drop(&dev->inbuf, dropsize);
+        }
+        else {
+            return dev->last_framesize;
+        }
     }
 }
 

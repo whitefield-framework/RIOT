@@ -1,10 +1,10 @@
 include ../Makefile.tests_common
 
-BOARD_INSUFFICIENT_MEMORY := chronos
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-nano  arduino-uno \
+                             chronos
 
 USEMODULE += xtimer
 
-include $(RIOTBASE)/Makefile.include
+TEST_ON_CI_WHITELIST += all
 
-test:
-	tests/01-run.py
+include $(RIOTBASE)/Makefile.include

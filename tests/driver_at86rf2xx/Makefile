@@ -1,9 +1,8 @@
 include ../Makefile.tests_common
 
 # exclude boards with insufficient memory
-BOARD_INSUFFICIENT_MEMORY := nucleo32-f031
-
-FEATURES_REQUIRED = periph_spi periph_gpio
+BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-nano arduino-uno \
+                             nucleo-f031k6
 
 DISABLE_MODULE += auto_init
 

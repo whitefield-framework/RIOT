@@ -9,9 +9,7 @@
  */
 
 /**
- * @defgroup    boards_pic32-clicker MikroE PIC32 Clicker
- * @ingroup     boards
- * @brief       Support for the MikroE PIC32 Clicker
+ * @ingroup     boards_pic32-clicker
  * @details
  * see:
  * http://www.mikroe.com/pic32/pic32mx-clicker/
@@ -48,7 +46,7 @@ extern "C" {
 #define EIC_IRQ (1)
 
 /**
- * @brief   LED pin configuration
+ * @name    LED pin configuration
  * @{
  */
 #define LED1_PIN            GPIO_PIN(PORT_B, 1)

@@ -36,7 +36,6 @@
 #define PHYDAT_H
 
 #include <stdint.h>
-#include <errno.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,6 +94,9 @@ enum {
     UNIT_A,         /**< Ampere */
     UNIT_V,         /**< Volts */
     UNIT_GS,        /**< gauss */
+    UNIT_DBM,       /**< decibel-milliwatts */
+    UNIT_COULOMB,   /**< coulomb */
+    UNIT_F,         /**< Farad */
     /* pressure */
     UNIT_BAR,       /**< Beer? */
     UNIT_PA,        /**< Pascal */
@@ -102,12 +104,16 @@ enum {
     UNIT_CD,        /**< Candela */
     /* logical */
     UNIT_BOOL,      /**< boolean value [0|1] */
+    UNIT_CTS,       /**< counts */
     UNIT_PERCENT,   /**< out of 100 */
     UNIT_PERMILL,   /**< out of 1000 */
     UNIT_PPM,       /**< part per million */
+    UNIT_PPB,       /**< part per billion */
     /* aggregate values */
     UNIT_TIME,      /**< the three dimensions contain sec, min, and hours */
-    UNIT_DATE       /**< the 3 dimensions contain days, months and years */
+    UNIT_DATE,      /**< the 3 dimensions contain days, months and years */
+    /* mass concentration */
+    UNIT_GPM3       /**< grams per cubic meters */
     /* extend this list as needed */
 };
 
@@ -139,6 +145,16 @@ typedef struct {
 } phydat_t;
 
 /**
+ * @brief   Minimum value for phydat_t::val
+ */
+#define PHYDAT_MIN  (INT16_MIN)
+
+/**
+ * @brief   Maximum value for phydat_t::val
+ */
+#define PHYDAT_MAX  (INT16_MAX)
+
+/**
  * @brief   Dump the given data container to STDIO
  *
  * @param[in] data      data container to dump
@@ -157,15 +173,47 @@ void phydat_dump(phydat_t *data, uint8_t dim);
 const char *phydat_unit_to_str(uint8_t unit);
 
 /**
- * @brief   Convert the given scale factor to a NULL terminated string
+ * @brief   Convert the given scale factor to an SI prefix
  *
- * The given scaling factor will be given as SI unit (e.g. M for Mega, u for
- * micro, etc) for obvious cases or in scientific notation (e.g. 2E11, 1E-22,
- * etc) otherwise.
+ * The given scaling factor is returned as a SI unit prefix (e.g. M for Mega, u
+ * for micro, etc), or `\0` otherwise.
  *
  * @param[in] scale     scale factor to convert
+ *
+ * @return  SI prefix if applicable
+ * @return  `\0` if no SI prefix was found
  */
-char phydat_scale_to_str(int8_t scale);
+char phydat_prefix_from_scale(int8_t scale);
+
+/**
+ * @brief   Scale integer value(s) to fit into a @ref phydat_t
+ *
+ * Inserts the @p values in the given @p dat so that all @p dim values in
+ * @p values fit inside the limits of the data type,
+ * [@ref PHYDAT_MIN, @ref PHYDAT_MAX], and updates the stored scale factor.
+ * The value is rounded to the nearest integer if possible, otherwise away from
+ * zero. E.g. `0.5` and `0.6` are rounded to `1`, `0.4` and `-0.4` are rounded
+ * to `0`, `-0.5` and `-0.6` are rounded to `-1`.
+ *
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.c}
+ * int32_t values[] = { 100000, 2000000, 30000000 };
+ * phydat_t dat = { .scale = 0 };
+ * phydat_fit(&dat, values, 3);
+ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ * @note Unless compiled with `-DPHYDAT_FIT_TRADE_PRECISION_FOR_ROM=0`, this
+ *       function will scale the value `-32768`, even though it would fit into a
+ *       @ref phydat_t. Statistically, this precision loss happens in 0.00153%
+ *       of the calls. This optimization saves a bit more than 20 bytes.
+ *
+ * @pre  The @ref phydat_t::scale member in @p dat was initialized by the
+         caller prior to calling this function.
+ *
+ * @param[in, out]  dat         the value will be written into this data array
+ * @param[in]       values      value(s) to rescale
+ * @param[in]       dim         Number of elements in @p values
+ */
+void phydat_fit(phydat_t *dat, const int32_t *values, unsigned int dim);
 
 #ifdef __cplusplus
 }

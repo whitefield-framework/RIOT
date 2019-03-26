@@ -22,7 +22,7 @@
 #include "periph_cpu.h"
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 /**
@@ -57,13 +57,6 @@
 #define CLOCK_APB2          (CLOCK_CORECLOCK / 1)
 #define CLOCK_APB1_DIV      RCC_CFGR_PPRE1_DIV2
 #define CLOCK_APB1          (CLOCK_CORECLOCK / 2)
-/** @} */
-
-/**
- * @name ADC configuration
- * @{
- */
-#define ADC_NUMOF           (0)
 /** @} */
 
 /**
