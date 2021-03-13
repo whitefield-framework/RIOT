@@ -33,23 +33,8 @@ extern "C" {
 #include "net/ethernet.h"
 #include "net/netdev.h"
 #include "thread.h"
-#include "openthread/types.h"
-
-/**
- * @name    Openthread message types
- * @{
- */
-/** @brief   xtimer message receiver event */
-#define OPENTHREAD_XTIMER_MSG_TYPE_EVENT                    (0x2235)
-/** @brief   message received from driver */
-#define OPENTHREAD_NETDEV_MSG_TYPE_EVENT                    (0x2236)
-/** @brief   event indicating a serial (UART) message was sent to OpenThread */
-#define OPENTHREAD_SERIAL_MSG_TYPE_EVENT                    (0x2237)
-/** @brief   event for frame reception */
-#define OPENTHREAD_MSG_TYPE_RECV                            (0x2238)
-/** @brief   event indicating an OT_JOB message */
-#define OPENTHREAD_JOB_MSG_TYPE_EVENT                       (0x2240)
-/** @} */
+#include "openthread/instance.h"
+#include "event.h"
 
 /**
  * @name    Openthread constants
@@ -67,7 +52,7 @@ extern "C" {
 #define OPENTHREAD_ERROR_NO_EMPTY_SERIAL_BUFFER             -1
 /** @brief   serial buffer ready to use */
 #define OPENTHREAD_SERIAL_BUFFER_STATUS_FREE                (0x0001)
-/** @brief   serial buffer ready for processsing */
+/** @brief   serial buffer ready for processing */
 #define OPENTHREAD_SERIAL_BUFFER_STATUS_READY_TO_PROCESS    (0x0002)
 /** @brief   serial buffer payload full */
 #define OPENTHREAD_SERIAL_BUFFER_STATUS_FULL                (0x0004)
@@ -90,6 +75,8 @@ typedef struct {
  * @brief   Struct containing an OpenThread job
  */
 typedef struct {
+    event_t ev;                             /**< Event associated to the OpenThread job */
+    int status;                             /**< Status of the job */
     const char *command;                    /**< A pointer to the job name string. */
     void *arg;                              /**< arg for the job **/
     void *answer;                           /**< answer from the job **/
@@ -111,6 +98,20 @@ void recv_pkt(otInstance *aInstance, netdev_t *dev);
  * @param[in]  event              just occurred netdev event
  */
 void send_pkt(otInstance *aInstance, netdev_t *dev, netdev_event_t event);
+
+/**
+ * @brief Get OpenThread event queue
+ *
+ * @return pointer to the event queue
+ */
+event_queue_t *openthread_get_evq(void);
+
+/**
+ * @brief Get pointer to the OpenThread instance
+ *
+ * @return pointer to the OpenThread instance
+ */
+otInstance* openthread_get_instance(void);
 
 /**
  * @brief   Bootstrap OpenThread

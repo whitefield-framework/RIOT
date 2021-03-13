@@ -92,7 +92,7 @@ void isr_dma14_dma30(void);  /**< DMA channel 14, 30 transfer complete interrupt
 void isr_dma15_dma31(void);  /**< DMA channel 15, 31 transfer complete interrupt handler */
 void isr_dma_error(void);    /**< DMA Error interrupt handler */
 void isr_enet_1588_timer(void); /**< Ethernet MAC IEEE 1588 timer interrupt handler */
-void isr_enet_error(void);   /**< Ethernet MAC error and miscelaneous interrupt handler */
+void isr_enet_error(void);   /**< Ethernet MAC error and miscellaneous interrupt handler */
 void isr_enet_receive(void); /**< Ethernet MAC receive interrupt handler */
 void isr_enet_transmit(void); /**< Ethernet MAC transmit interrupt handler */
 void isr_ftfa(void);         /**< FTFA Command complete interrupt handler */
@@ -109,6 +109,7 @@ void isr_i2c0(void);         /**< I2C0 interrupt handler */
 void isr_i2c1(void);         /**< I2C1 interrupt handler */
 void isr_i2c2(void);         /**< I2C2 interrupt handler */
 void isr_i2c3(void);         /**< I2C3 interrupt handler */
+void isr_i2s0(void);         /**< I2S0 interrupt handler */
 void isr_i2s0_rx(void);      /**< I2S0 receive interrupt handler */
 void isr_i2s0_tx(void);      /**< I2S0 transmit interrupt handler */
 void isr_llwu(void);         /**< Low leakage wakeup interrupt handler */
@@ -134,6 +135,7 @@ void isr_portc(void);        /**< Port C pin detect interrupt handler */
 void isr_portd(void);        /**< Port D pin detect interrupt handler */
 void isr_porte(void);        /**< Port E pin detect interrupt handler */
 void isr_portb_portc(void);  /**< Port B, C combined pin detect interrupt handler */
+void isr_portc_portd(void);  /**< Port C, D combined pin detect interrupt handler */
 void isr_radio_0(void);      /**< Radio transceiver INT0 interrupt handler */
 void isr_radio_1(void);      /**< Radio transceiver INT1 interrupt handler */
 void isr_rng(void);          /**< RNG interrupt handler */
@@ -158,6 +160,7 @@ void isr_uart1_err(void);    /**< UART1 error interrupt handler */
 void isr_uart1_rx_tx(void);  /**< UART1 receive/transmit interrupt handler */
 void isr_uart2(void);        /**< UART2 unified interrupt handler */
 void isr_uart2_err(void);    /**< UART2 error interrupt handler */
+void isr_uart2_flexio(void); /**< UART2 or FlexIO interrupt handler */
 void isr_uart2_rx_tx(void);  /**< UART2 receive/transmit interrupt handler */
 void isr_uart3(void);        /**< UART3 unified interrupt handler */
 void isr_uart3_err(void);    /**< UART3 error interrupt handler */

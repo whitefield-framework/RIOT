@@ -1,6 +1,6 @@
 .all:
 
-.PHONY: all doc doc-man doc-latex docclean welcome
+.PHONY: all doc doc-man doc-latex docclean print-versions welcome
 
 all: welcome
 	@echo ""
@@ -22,7 +22,11 @@ clean:
 	@echo "Cleaning all build products for the current board"
 	@for dir in $(APPLICATION_DIRS); do "$(MAKE)" -C$$dir clean; done
 
-distclean: docclean
+pkg-clean:
+	@echo "Cleaning all package sources"
+	rm -rf build/pkg
+
+distclean: docclean pkg-clean
 	@echo "Cleaning all build products"
 	@for dir in $(APPLICATION_DIRS); do "$(MAKE)" -C$$dir distclean; done
 
@@ -34,9 +38,16 @@ welcome:
 	@echo ""
 	@echo "Please see our Quick Start Guide at:"
 	@echo "    https://doc.riot-os.org/getting-started.html"
-	@echo "Or ask questions on our mailing list:"
+	@echo "You can ask questions on our forum:"
+	@echo "    https://forum.riot-os.org"
+	@echo "Or discuss with other users on the mailing list:"
 	@echo "    users@riot-os.org (http://lists.riot-os.org/mailman/listinfo/users)"
 
+print-versions:
+	@./dist/tools/ci/print_toolchain_versions.sh
+
+include makefiles/boards.inc.mk
 include makefiles/app_dirs.inc.mk
 
+include makefiles/tools/riotgen.inc.mk
 -include makefiles/tests.inc.mk

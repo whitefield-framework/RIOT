@@ -12,6 +12,8 @@
  * @file
  */
 
+#include <inttypes.h>
+
 #include "net/gnrc.h"
 
 #include "od.h"
@@ -20,13 +22,8 @@
 #include "net/gnrc/ipv6/hdr.h"
 #include "utlist.h"
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
-
-#if ENABLE_DEBUG
-/* For PRIu16 etc. */
-#include <inttypes.h>
-#endif
 
 gnrc_pktsnip_t *gnrc_icmpv6_echo_build(uint8_t type, uint16_t id, uint16_t seq,
                                        uint8_t *data, size_t data_len)
@@ -98,16 +95,10 @@ void gnrc_icmpv6_echo_req_handle(gnrc_netif_t *netif, ipv6_hdr_t *ipv6_hdr,
         gnrc_pktbuf_release(pkt);
         return;
     }
+    /* (netif == NULL) => ipv6_hdr->dst is loopback address */
+    gnrc_netif_hdr_set_netif(hdr->data, netif);
 
-    if (netif != NULL) {
-        ((gnrc_netif_hdr_t *)hdr->data)->if_pid = netif->pid;
-    }
-    else {
-        /* ipv6_hdr->dst is loopback address */
-        ((gnrc_netif_hdr_t *)hdr->data)->if_pid = KERNEL_PID_UNDEF;
-    }
-
-    LL_PREPEND(pkt, hdr);
+    pkt = gnrc_pkt_prepend(pkt, hdr);
 
     if (!gnrc_netapi_dispatch_send(GNRC_NETTYPE_IPV6, GNRC_NETREG_DEMUX_CTX_ALL,
                                    pkt)) {

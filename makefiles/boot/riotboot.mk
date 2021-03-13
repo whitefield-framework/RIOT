@@ -1,4 +1,5 @@
 ifneq (,$(filter riotboot,$(FEATURES_USED)))
+ifneq (1,$(RIOTBOOT_BUILD))
 
 .PHONY: riotboot/flash riotboot/flash-bootloader riotboot/flash-slot0 riotboot/flash-slot1 riotboot/bootloader/%
 
@@ -14,15 +15,22 @@ BINDIR_APP = $(BINDIR)/$(APPLICATION)
 export SLOT0_OFFSET SLOT0_LEN SLOT1_OFFSET SLOT1_LEN
 
 # Mandatory APP_VER, set to epoch by default
-APP_VER ?= $(shell date +%s)
+EPOCH := $(shell date +%s)
+APP_VER ?= $(EPOCH)
 
 # Final target for slot 0 with riot_hdr
-SLOT0_RIOT_BIN = $(BINDIR_APP)-slot0.riot.bin
-SLOT1_RIOT_BIN = $(BINDIR_APP)-slot1.riot.bin
+SLOT0_RIOT_BIN = $(BINDIR_APP)-slot0.$(APP_VER).riot.bin
+SLOT1_RIOT_BIN = $(BINDIR_APP)-slot1.$(APP_VER).riot.bin
 SLOT_RIOT_BINS = $(SLOT0_RIOT_BIN) $(SLOT1_RIOT_BIN)
 
+# if RIOTBOOT_SKIP_COMPILE is set to 1, "make riotboot/slot[01](-flash)"
+# will not depend on the base elf files, thus skipping the compilation step.
+# This results in the equivalent to "make flash-only" for
+# "make riotboot/flash-slot[01]".
+ifneq (1, $(RIOTBOOT_SKIP_COMPILE))
 $(BINDIR_APP)-%.elf: $(BASELIBS)
 	$(Q)$(_LINK) -o $@
+endif
 
 # Slot 0 and 1 firmware offset, after header
 SLOT0_IMAGE_OFFSET := $$(($(SLOT0_OFFSET) + $(RIOTBOOT_HDR_LEN)))
@@ -33,9 +41,15 @@ $(BINDIR_APP)-slot0.elf: FW_ROM_LEN=$$((SLOT0_LEN - $(RIOTBOOT_HDR_LEN)))
 $(BINDIR_APP)-slot0.elf: ROM_OFFSET=$(SLOT0_IMAGE_OFFSET)
 $(BINDIR_APP)-slot1.elf: FW_ROM_LEN=$$((SLOT1_LEN - $(RIOTBOOT_HDR_LEN)))
 $(BINDIR_APP)-slot1.elf: ROM_OFFSET=$(SLOT1_IMAGE_OFFSET)
+SLOT_RIOT_ELFS = $(BINDIR_APP)-slot0.elf $(BINDIR_APP)-slot1.elf
+
+# ensure both slot elf files are always linked
+# this ensures that both "make test" and "make test-murdock" can rely on them
+# being present without having to trigger re-compilation.
+BUILD_FILES += $(SLOT_RIOT_ELFS)
 
 # Create binary target with RIOT header
-$(SLOT_RIOT_BINS): %.riot.bin: %.hdr %.bin
+$(SLOT_RIOT_BINS): %.$(APP_VER).riot.bin: %.hdr %.bin
 	@echo "creating $@..."
 	$(Q)cat $^ > $@
 
@@ -45,7 +59,7 @@ $(HEADER_TOOL): FORCE
 	@echo "compiling $@..."
 	$(Q)/usr/bin/env -i \
 		QUIET=$(QUIET) \
-		PATH=$(PATH) \
+		PATH="$(PATH)" \
 			$(MAKE) --no-print-directory -C $(HEADER_TOOL_DIR) all
 
 # Generate RIOT header and keep the original binary file
@@ -62,10 +76,12 @@ riotboot: $(SLOT_RIOT_BINS)
 
 # riotboot bootloader compile target
 riotboot/flash-bootloader: riotboot/bootloader/flash
-riotboot/bootloader/%:
+riotboot/bootloader/%: $(BUILDDEPS)
 	$(Q)/usr/bin/env -i \
-		QUIET=$(QUIET)\
-		PATH=$(PATH) BOARD=$(BOARD) \
+		QUIET=$(QUIET) PATH="$(PATH)"\
+		EXTERNAL_BOARD_DIRS="$(EXTERNAL_BOARD_DIRS)" BOARD=$(BOARD)\
+		DEBUG_ADAPTER_ID=$(DEBUG_ADAPTER_ID) \
+		PROGRAMMER=$(PROGRAMMER) PROGRAMMER_QUIET=$(PROGRAMMER_QUIET) \
 			$(MAKE) --no-print-directory -C $(RIOTBOOT_DIR) $*
 
 # Generate a binary file from the bootloader which fills all the
@@ -97,30 +113,24 @@ $(RIOTBOOT_EXTENDED_BIN): $(RIOTBOOT_COMBINED_BIN)
 	$(Q)truncate -s $$(($(SLOT0_OFFSET) + $(SLOT0_LEN) + $(RIOTBOOT_HDR_LEN))) $@.tmp
 	$(Q)mv $@.tmp $@
 
-# Flashing rule for openocd to flash combined/extended binaries
-riotboot/flash-combined-slot0: ELFFILE=$(RIOTBOOT_COMBINED_BIN)
-riotboot/flash-extended-slot0: ELFFILE=$(RIOTBOOT_EXTENDED_BIN)
-
+# Flashing rule for combined binaries
 riotboot/flash-combined-slot0: FLASHFILE=$(RIOTBOOT_COMBINED_BIN)
 riotboot/flash-combined-slot0: $(RIOTBOOT_COMBINED_BIN) $(FLASHDEPS)
 	$(flash-recipe)
 
+# Flashing rule for extended binaries
 riotboot/flash-extended-slot0: FLASHFILE=$(RIOTBOOT_EXTENDED_BIN)
 riotboot/flash-extended-slot0: $(RIOTBOOT_EXTENDED_BIN) $(FLASHDEPS)
 	$(flash-recipe)
 
 # Flashing rule for slot 0
 riotboot/flash-slot0: export IMAGE_OFFSET=$(SLOT0_OFFSET)
-# openocd
-riotboot/flash-slot1: ELFFILE=$(SLOT1_RIOT_BIN)
 riotboot/flash-slot0: FLASHFILE=$(SLOT0_RIOT_BIN)
 riotboot/flash-slot0: $(SLOT0_RIOT_BIN) $(FLASHDEPS)
 	$(flash-recipe)
 
 # Flashing rule for slot 1
 riotboot/flash-slot1: export IMAGE_OFFSET=$(SLOT1_OFFSET)
-# openocd
-riotboot/flash-slot1: ELFFILE=$(SLOT1_RIOT_BIN)
 riotboot/flash-slot1: FLASHFILE=$(SLOT1_RIOT_BIN)
 riotboot/flash-slot1: $(SLOT1_RIOT_BIN) $(FLASHDEPS)
 	$(flash-recipe)
@@ -132,9 +142,20 @@ riotboot/slot1: $(SLOT1_RIOT_BIN)
 # Default flashing rule for bootloader + slot 0
 riotboot/flash: riotboot/flash-slot0 riotboot/flash-bootloader
 
+# make applications that use the riotboot feature default to actually using it
+# Target 'all' will generate the combined file directly.
+# It also makes 'flash' and 'flash-only' work without specific command.
+FLASHFILE = $(RIOTBOOT_EXTENDED_BIN)
+
+# include suit targets
+ifneq (,$(filter suit, $(USEMODULE)))
+  include $(RIOTMAKE)/suit.inc.mk
+endif
+
 else
 riotboot:
 	$(Q)echo "error: riotboot feature not selected! (try FEATURES_REQUIRED += riotboot)"
 	$(Q)false
 
+endif # (1,$(RIOTBOOT_BUILD))
 endif # (,$(filter riotboot,$(FEATURES_USED)))

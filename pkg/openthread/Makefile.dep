@@ -1,10 +1,9 @@
-ifneq (,$(filter openthread,$(USEPKG)))
-  USEMODULE += openthread_contrib
-  USEMODULE += mbedcrypto
-endif
+USEMODULE += openthread_contrib
 
-ifneq (,$(filter openthread_contrib,$(USEMODULE)))
-  USEMODULE += openthread_contrib_netdev
-  USEMODULE += xtimer
-  FEATURES_REQUIRED += cpp
-endif
+USEMODULE += netdev
+USEMODULE += openthread_contrib_netdev
+USEMODULE += l2util
+USEMODULE += xtimer
+USEMODULE += event
+
+FEATURES_REQUIRED += cpp

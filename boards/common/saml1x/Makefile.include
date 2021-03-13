@@ -1,10 +1,4 @@
-# define the cpu used by the saml11 board
-export CPU = saml1x
-
-# set edbg device type
-EDBG_DEVICE_TYPE = mchp_cm23
-
-USEMODULE += boards_common_saml1x
+OPENOCD_CONFIG ?= $(RIOTBOARD)/common/saml1x/dist/openocd.cfg
 
 include $(RIOTMAKE)/boards/sam0.inc.mk
 

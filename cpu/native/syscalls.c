@@ -25,6 +25,7 @@
 
 #include <err.h>
 #include <errno.h>
+#include <poll.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -42,10 +43,7 @@
 
 #include "native_internal.h"
 
-#define ENABLE_DEBUG (0)
-#if ENABLE_DEBUG
-#define LOCAL_DEBUG (1)
-#endif
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 ssize_t (*real_read)(int fd, void *buf, size_t count);
@@ -83,6 +81,7 @@ int (*real_open)(const char *path, int oflag, ...);
 int (*real_pause)(void);
 int (*real_pipe)(int[2]);
 int (*real_select)(int nfds, ...);
+int (*real_poll)(struct pollfd *fds, ...);
 int (*real_setitimer)(int which, const struct itimerval
         *restrict value, struct itimerval *restrict ovalue);
 int (*real_setsid)(void);
@@ -107,27 +106,29 @@ int (*real_clock_gettime)(clockid_t clk_id, struct timespec *tp);
 void _native_syscall_enter(void)
 {
     _native_in_syscall++;
-#if LOCAL_DEBUG
-    real_write(STDERR_FILENO, "> _native_in_syscall\n", 21);
-#endif
+
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
+        real_write(STDERR_FILENO, "> _native_in_syscall\n", 21);
+    }
 }
 
 void _native_syscall_leave(void)
 {
-#if LOCAL_DEBUG
-    real_write(STDERR_FILENO, "< _native_in_syscall\n", 21);
-#endif
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
+        real_write(STDERR_FILENO, "< _native_in_syscall\n", 21);
+    }
+
     _native_in_syscall--;
     if (
             (_native_sigpend > 0)
             && (_native_in_isr == 0)
             && (_native_in_syscall == 0)
             && (native_interrupts_enabled == 1)
-            && (sched_active_thread != NULL)
+            && (thread_get_active() != NULL)
        )
     {
         _native_in_isr = 1;
-        _native_cur_ctx = (ucontext_t *)sched_active_thread->sp;
+        _native_cur_ctx = (ucontext_t *)thread_get_active()->sp;
         native_isr_context.uc_stack.ss_sp = __isr_stack;
         native_isr_context.uc_stack.ss_size = SIGSTKSZ;
         native_isr_context.uc_stack.ss_flags = 0;
@@ -142,7 +143,7 @@ void _native_syscall_leave(void)
 /* make use of TLSF if it is included, except when building with valgrind
  * support, where one probably wants to make use of valgrind's memory leak
  * detection abilities*/
-#if !(defined MODULE_TLSF) || (defined(HAVE_VALGRIND_H))
+#if (!(defined MODULE_TLSF) && !(defined NATIVE_MEMORY)) || (defined(HAVE_VALGRIND_H))
 int _native_in_malloc = 0;
 void *malloc(size_t size)
 {
@@ -176,11 +177,7 @@ void free(void *ptr)
     _native_syscall_leave();
 }
 
-#ifdef NATIVE_IN_CALLOC
-int _native_in_calloc = 1;
-#else
 int _native_in_calloc = 0;
-#endif
 void *calloc(size_t nmemb, size_t size)
 {
     /* dynamically load calloc when it's needed - this is necessary to
@@ -279,8 +276,10 @@ char *make_message(const char *format, va_list argp)
 
     while (1) {
         int n = vsnprintf(message, size, format, argp);
-        if (n < 0)
+        if (n < 0) {
+            free(message);
             return NULL;
+        }
         if (n < size)
             return message;
         size = n + 1;
@@ -466,6 +465,7 @@ void _native_init_syscalls(void)
     *(void **)(&real_fork) = dlsym(RTLD_NEXT, "fork");
     *(void **)(&real_dup2) = dlsym(RTLD_NEXT, "dup2");
     *(void **)(&real_select) = dlsym(RTLD_NEXT, "select");
+    *(void **)(&real_poll) = dlsym(RTLD_NEXT, "poll");
     *(void **)(&real_setitimer) = dlsym(RTLD_NEXT, "setitimer");
     *(void **)(&real_setsid) = dlsym(RTLD_NEXT, "setsid");
     *(void **)(&real_setsockopt) = dlsym(RTLD_NEXT, "setsockopt");

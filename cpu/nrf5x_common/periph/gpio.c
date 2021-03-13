@@ -28,6 +28,8 @@
  * @}
  */
 
+#include <assert.h>
+
 #include "cpu.h"
 #include "periph/gpio.h"
 #include "periph_cpu.h"
@@ -71,11 +73,11 @@ static inline NRF_GPIO_Type *port(gpio_t pin)
 #if (CPU_FAM_NRF51)
     (void) pin;
     return NRF_GPIO;
-#elif defined(CPU_MODEL_NRF52832XXAA)
+#elif defined(NRF_P1)
+    return (pin & PORT_BIT) ? NRF_P1 : NRF_P0;
+#else
     (void) pin;
     return NRF_P0;
-#else
-    return (pin & PORT_BIT) ? NRF_P1 : NRF_P0;
 #endif
 }
 
@@ -84,7 +86,7 @@ static inline NRF_GPIO_Type *port(gpio_t pin)
  */
 static inline int pin_num(gpio_t pin)
 {
-#ifdef CPU_MODEL_NRF52840XXAA
+#if GPIO_COUNT > 1
     return (pin & PIN_MASK);
 #else
     return (int)pin;
@@ -97,8 +99,10 @@ int gpio_init(gpio_t pin, gpio_mode_t mode)
         case GPIO_IN:
         case GPIO_IN_PD:
         case GPIO_IN_PU:
+        case GPIO_IN_OD_PU:
         case GPIO_OUT:
-            /* configure pin direction, input buffer and pull resistor state */
+            /* configure pin direction, input buffer, pull resistor state
+             * and drive configuration */
             port(pin)->PIN_CNF[pin_num(pin)] = mode;
             break;
         default:
@@ -144,17 +148,21 @@ void gpio_write(gpio_t pin, int value)
 }
 
 #ifdef MODULE_PERIPH_GPIO_IRQ
-int gpio_init_int(gpio_t pin, gpio_mode_t mode, gpio_flank_t flank,
-                  gpio_cb_t cb, void *arg)
+uint8_t gpio_int_get_exti(gpio_t pin)
 {
-    uint8_t _pin_index = 0xff;
     /* Looking for already known pin in exti table */
     for (unsigned int i = 0; i < _gpiote_next_index; i++) {
         if (_exti_pins[i] == pin) {
-            _pin_index = i;
-            break;
+            return i;
         }
     }
+    return 0xff;
+}
+
+int gpio_init_int(gpio_t pin, gpio_mode_t mode, gpio_flank_t flank,
+                  gpio_cb_t cb, void *arg)
+{
+    uint8_t _pin_index = gpio_int_get_exti(pin);
 
     /* New pin */
     if (_pin_index == 0xff) {
@@ -176,7 +184,7 @@ int gpio_init_int(gpio_t pin, gpio_mode_t mode, gpio_flank_t flank,
     /* configure the GPIOTE channel: set even mode, pin and active flank */
     NRF_GPIOTE->CONFIG[_pin_index] = (GPIOTE_CONFIG_MODE_Event |
                              (pin_num(pin) << GPIOTE_CONFIG_PSEL_Pos) |
-#ifdef CPU_MODEL_NRF52840XXAA
+#if GPIO_COUNT > 1
                              ((pin & PORT_BIT) << 8) |
 #endif
                              (flank << GPIOTE_CONFIG_POLARITY_Pos));

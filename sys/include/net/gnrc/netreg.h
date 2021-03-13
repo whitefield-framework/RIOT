@@ -23,7 +23,7 @@
 
 #include <inttypes.h>
 
-#include "kernel_types.h"
+#include "sched.h"
 #include "net/gnrc/nettype.h"
 #include "net/gnrc/pkt.h"
 
@@ -40,7 +40,7 @@ extern "C" {
 /**
  *  @brief  The type of the netreg entry.
  *
- *          Different types are availalbe dependent on the used modules.
+ *          Different types are available dependent on the used modules.
  */
 typedef enum {
     /**

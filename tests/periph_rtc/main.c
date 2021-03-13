@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "mutex.h"
 #include "periph_conf.h"
 #include "periph/rtc.h"
 #include "xtimer.h"
@@ -49,39 +50,31 @@ static void print_time(const char *label, const struct tm *time)
 static void inc_secs(struct tm *time, unsigned val)
 {
     time->tm_sec += val;
-    if (time->tm_sec >= 60) {
-        time->tm_sec -= 60;
-    }
 }
 
 static void cb(void *arg)
 {
-    (void)arg;
-
-    puts("Alarm!");
-
-    if (++cnt < REPEAT) {
-        struct tm time;
-        rtc_get_alarm(&time);
-        inc_secs(&time, PERIOD);
-        rtc_set_alarm(&time, cb, NULL);
-    }
+    mutex_unlock(arg);
 }
 
 int main(void)
 {
     struct tm time = {
-        .tm_year = 2011 - TM_YEAR_OFFSET,   /* years are counted from 1900 */
-        .tm_mon  = 11,                      /* 0 = January, 11 = December */
-        .tm_mday = 13,
-        .tm_hour = 14,
-        .tm_min  = 15,
-        .tm_sec  = 15
+        .tm_year = 2020 - TM_YEAR_OFFSET,   /* years are counted from 1900 */
+        .tm_mon  =  1,                      /* 0 = January, 11 = December */
+        .tm_mday = 28,
+        .tm_hour = 23,
+        .tm_min  = 59,
+        .tm_sec  = 57
     };
+
+    mutex_t rtc_mtx = MUTEX_INIT_LOCKED;
 
     puts("\nRIOT RTC low-level driver test");
     printf("This test will display 'Alarm!' every %u seconds for %u times\n",
             PERIOD, REPEAT);
+
+    rtc_init();
 
     /* set RTC */
     print_time("  Setting clock to ", &time);
@@ -94,12 +87,46 @@ int main(void)
     /* set initial alarm */
     inc_secs(&time, PERIOD);
     print_time("  Setting alarm to ", &time);
-    rtc_set_alarm(&time, cb, NULL);
+    rtc_set_alarm(&time, cb, &rtc_mtx);
 
     /* verify alarm */
     rtc_get_alarm(&time);
     print_time("   Alarm is set to ", &time);
+
+    /* clear alarm */
+    rtc_clear_alarm();
+    rtc_get_time(&time);
+    print_time("  Alarm cleared at ", &time);
+
+    /* verify alarm has been cleared */
+    xtimer_sleep(PERIOD);
+    rtc_get_time(&time);
+    if (mutex_trylock(&rtc_mtx)) {
+        print_time("   Error: Alarm at ", &time);
+    }
+    else {
+        print_time("       No alarm at ", &time);
+    }
+
+    /* set alarm */
+    rtc_get_time(&time);
+    inc_secs(&time, PERIOD);
+    rtc_set_alarm(&time, cb, &rtc_mtx);
+    print_time("  Setting alarm to ", &time);
     puts("");
+
+    /* loop over a few alarm cycles */
+    while (1) {
+        mutex_lock(&rtc_mtx);
+        puts("Alarm!");
+
+        if (++cnt < REPEAT) {
+            struct tm time;
+            rtc_get_alarm(&time);
+            inc_secs(&time, PERIOD);
+            rtc_set_alarm(&time, cb, &rtc_mtx);
+        }
+    }
 
     return 0;
 }

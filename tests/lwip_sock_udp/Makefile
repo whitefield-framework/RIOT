@@ -1,17 +1,7 @@
 include ../Makefile.tests_common
 
-# lwIP's memory management doesn't seem to work on non 32-bit platforms at the
-# moment.
-BOARD_BLACKLIST := arduino-duemilanove arduino-mega2560 arduino-nano \
-                   arduino-uno chronos esp8266-esp-12x esp8266-olimex-mod \
-                   esp8266-sparkfun-thing jiminy-mega256rfr2 mega-xplained \
-                   msb-430 msb-430h telosb waspmote-pro \
-                   wsn430-v1_3b wsn430-v1_4 z1
-BOARD_INSUFFICIENT_MEMORY = nucleo-f031k6 nucleo-f042k6 nucleo-l031k6 nucleo-f030r8 \
-                            nucleo-f303k8 nucleo-f334r8 nucleo-l053r8 \
-                            stm32f0discovery
-
 LWIP_IPV4 ?= 0
+AUX_LOCAL ?= 1
 
 ifneq (0, $(LWIP_IPV4))
   USEMODULE += ipv4_addr
@@ -28,14 +18,19 @@ ifneq (0, $(LWIP_IPV6))
   USEMODULE += lwip_ipv6_autoconfig
 endif
 
+ifeq (1, $(AUX_LOCAL))
+  USEMODULE += sock_aux_local
+endif
+
 USEMODULE += inet_csum
+USEMODULE += l2util
 USEMODULE += lwip_netdev
-USEMODULE += lwip_sock_udp
 USEMODULE += netdev_eth
 USEMODULE += netdev_test
 USEMODULE += ps
+USEMODULE += sock_udp
 
-DISABLE_MODULE += auto_init
+DISABLE_MODULE += auto_init_lwip
 
 CFLAGS += -DSO_REUSE
 CFLAGS += -DLWIP_SO_RCVTIMEO

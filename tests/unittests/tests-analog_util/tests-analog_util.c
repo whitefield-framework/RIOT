@@ -11,7 +11,7 @@
 
 #include "analog_util.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 typedef struct {
@@ -44,7 +44,7 @@ static test_values_t test_data[] = {
     {  3972L,  9876,      10000L,          0L, ADC_RES_14BIT},
 };
 
-#define TEST_DATA_NUMOF (sizeof(test_data) / sizeof(test_data[0]))
+#define TEST_DATA_NUMOF ARRAY_SIZE(test_data)
 
 static void test_adc_util_map(void)
 {

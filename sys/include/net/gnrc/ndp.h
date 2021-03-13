@@ -22,7 +22,6 @@
 
 #include <stdint.h>
 
-#include "kernel_types.h"
 #include "net/gnrc/pkt.h"
 #include "net/gnrc/netif.h"
 #include "net/ipv6/addr.h"
@@ -216,7 +215,7 @@ gnrc_pktsnip_t *gnrc_ndp_opt_tl2a_build(const uint8_t *l2addr,
  * @param[in] valid_ltime   Length of time in seconds that @p prefix is valid.
  *                          UINT32_MAX represents infinity.
  * @param[in] pref_ltime    Length of time in seconds that addresses using
- *                          @p prefix remain prefered. UINT32_MAX represents
+ *                          @p prefix remain preferred. UINT32_MAX represents
  *                          infinity.
  * @param[in] flags         Flags as defined in net/ndp.h.
  *                          - @ref NDP_OPT_PI_FLAGS_L == 1 indicates, that

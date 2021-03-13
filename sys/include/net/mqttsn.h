@@ -27,13 +27,15 @@
 extern "C" {
 #endif
 
-
-#ifndef MQTTSN_DEFAULT_PORT
 /**
- * @brief   Default UDP port for MQTT-SN servers
+ * @name    The client ID must contain 1-23 characters
+ *
+ * @see MQTT-SN spec v1.2, section 5.3.1
+ * @{
  */
-#define MQTTSN_DEFAULT_PORT     (1883U)
-#endif
+#define MQTTSN_CLI_ID_MINLEN    (1U)
+#define MQTTSN_CLI_ID_MAXLEN    (23U)
+/** @} */
 
 /**
  * @brief   MQTT-SN flags
@@ -48,6 +50,7 @@ enum {
     MQTTSN_QOS_MASK   = 0x60,       /**< QoS level mask */
     MQTTSN_QOS_2      = 0x40,       /**< QoS level 2 */
     MQTTSN_QOS_1      = 0x20,       /**< QoS level 1 */
+    MQTTSN_QOS_NEG1   = 0x60,       /**< QoS level -1 (negative 1) */
     MQTTSN_QOS_0      = 0x00,       /**< QoS level 0 */
     MQTTSN_RETAIN     = 0x10,       /**< retain flag */
     MQTTSN_WILL       = 0x08,       /**< will flag, used during CONNECT */

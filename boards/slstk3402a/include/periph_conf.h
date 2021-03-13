@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2018 Freie Universität Berlin
+ * Copyright (C) 2015-2020 Freie Universität Berlin
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -27,11 +27,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * @brief   Internal macro to calculate *_NUMOF based on config.
- */
-#define PERIPH_NUMOF(config)    (sizeof(config) / sizeof(config[0]))
 
 /**
  * @name    Clock configuration
@@ -80,8 +75,8 @@ static const adc_chan_conf_t adc_channel_config[] = {
     }
 };
 
-#define ADC_DEV_NUMOF       PERIPH_NUMOF(adc_config)
-#define ADC_NUMOF           PERIPH_NUMOF(adc_channel_config)
+#define ADC_DEV_NUMOF       ARRAY_SIZE(adc_config)
+#define ADC_NUMOF           ARRAY_SIZE(adc_channel_config)
 /** @} */
 
 /**
@@ -101,21 +96,14 @@ static const i2c_conf_t i2c_config[] = {
     }
 };
 
-#define I2C_NUMOF           PERIPH_NUMOF(i2c_config)
+#define I2C_NUMOF           ARRAY_SIZE(i2c_config)
 #define I2C_0_ISR           isr_i2c0
 /** @} */
-
-/**
- * @brief   RTC configuration
- */
-#define RTC_NUMOF           (1U)
 
 /**
  * @name    RTT configuration
  * @{
  */
-#define RTT_NUMOF           (1U)
-
 #define RTT_MAX_VALUE       (0xFFFFFFFF)
 #define RTT_FREQUENCY       (1U)
 /** @} */
@@ -138,7 +126,7 @@ static const spi_dev_t spi_config[] = {
     }
 };
 
-#define SPI_NUMOF           PERIPH_NUMOF(spi_config)
+#define SPI_NUMOF           ARRAY_SIZE(spi_config)
 /** @} */
 
 /**
@@ -149,20 +137,47 @@ static const spi_dev_t spi_config[] = {
  */
 static const timer_conf_t timer_config[] = {
     {
-        {
+        .prescaler = {
             .dev = WTIMER0,
             .cmu = cmuClock_WTIMER0
         },
-        {
+        .timer = {
             .dev = WTIMER1,
             .cmu = cmuClock_WTIMER1
         },
-        .irq = WTIMER1_IRQn
+        .irq = WTIMER1_IRQn,
+        .channel_numof = 3
+    },
+    {
+        .prescaler = {
+            .dev = TIMER0,
+            .cmu = cmuClock_TIMER0
+        },
+        .timer = {
+            .dev = TIMER1,
+            .cmu = cmuClock_TIMER1
+        },
+        .irq = TIMER1_IRQn,
+        .channel_numof = 3
+    },
+    {
+        .prescaler = {
+            .dev = NULL,
+            .cmu = cmuClock_LETIMER0
+        },
+        .timer = {
+            .dev = LETIMER0,
+            .cmu = cmuClock_LETIMER0
+        },
+        .irq = LETIMER0_IRQn,
+        .channel_numof = 2
     }
 };
 
-#define TIMER_NUMOF         PERIPH_NUMOF(timer_config)
+#define TIMER_NUMOF         ARRAY_SIZE(timer_config)
 #define TIMER_0_ISR         isr_wtimer1
+#define TIMER_1_ISR         isr_timer1
+#define TIMER_2_ISR         isr_letimer0
 /** @} */
 
 /**
@@ -176,9 +191,6 @@ static const uart_conf_t uart_config[] = {
         .tx_pin = GPIO_PIN(PA, 0),
         .loc = USART_ROUTELOC0_RXLOC_LOC0 |
                USART_ROUTELOC0_TXLOC_LOC0,
-#if EFM32_UART_MODES
-        .mode = UART_MODE_8N1,
-#endif
         .cmu = cmuClock_USART0,
         .irq = USART0_RX_IRQn
     },
@@ -188,15 +200,12 @@ static const uart_conf_t uart_config[] = {
         .tx_pin = GPIO_PIN(PD, 10),
         .loc = LEUART_ROUTELOC0_RXLOC_LOC18 |
                LEUART_ROUTELOC0_TXLOC_LOC18,
-#if EFM32_UART_MODES
-        .mode = UART_MODE_8N1,
-#endif
         .cmu = cmuClock_LEUART0,
         .irq = LEUART0_IRQn
     }
 };
 
-#define UART_NUMOF          PERIPH_NUMOF(uart_config)
+#define UART_NUMOF          ARRAY_SIZE(uart_config)
 #define UART_0_ISR_RX       isr_usart0_rx
 #define UART_1_ISR_RX       isr_leuart0
 /** @} */

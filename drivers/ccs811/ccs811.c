@@ -13,6 +13,7 @@
  * @file
  */
 
+#include <assert.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -23,7 +24,7 @@
 #include "ccs811_regs.h"
 #include "ccs811.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 /**
@@ -75,7 +76,7 @@ int ccs811_init(ccs811_t *dev, const ccs811_params_t *params)
 
     int res = CCS811_OK;
 
-    if (dev->params.reset_pin != GPIO_UNDEF &&
+    if (gpio_is_valid(dev->params.reset_pin) &&
         gpio_init(dev->params.reset_pin, GPIO_OUT) == 0) {
         DEBUG_DEV("nRESET pin configured", dev);
         /* enable low active reset signal */
@@ -88,7 +89,7 @@ int ccs811_init(ccs811_t *dev, const ccs811_params_t *params)
         xtimer_usleep(1000);
     }
 
-    if (dev->params.wake_pin != GPIO_UNDEF &&
+    if (gpio_is_valid(dev->params.wake_pin) &&
         gpio_init(dev->params.wake_pin, GPIO_OUT) == 0) {
         gpio_clear(dev->params.wake_pin);
         DEBUG_DEV("nWAKE pin configured", dev);
@@ -186,7 +187,7 @@ int ccs811_set_mode(ccs811_t *dev, ccs811_mode_t mode)
         return -CCS811_ERROR_I2C;
     }
 
-    /* check whether setting measurement mode were succesfull */
+    /* check whether setting measurement mode were successful */
     if (_reg_read(dev, CCS811_REG_MEAS_MODE, (uint8_t *)&reg, 1) != CCS811_OK) {
         DEBUG_DEV("could not read new measurement mode "
                   "from register CCS811_REG_MEAS_MODE", dev);
@@ -208,7 +209,7 @@ int ccs811_set_int_mode(ccs811_t *dev, ccs811_int_mode_t mode)
 {
     ASSERT_PARAM(dev != NULL);
 
-    if (dev->params.int_pin == GPIO_UNDEF) {
+    if (!gpio_is_valid(dev->params.int_pin)) {
         DEBUG_DEV("nINT pin not configured", dev);
         return CCS811_ERROR_NO_INT_PIN;
     }
@@ -365,7 +366,7 @@ int ccs811_power_down (ccs811_t *dev)
     int res = ccs811_set_mode(dev, CCS811_MODE_IDLE);
     dev->params.mode = tmp_mode;
 
-    if (dev->params.wake_pin != GPIO_UNDEF) {
+    if (gpio_is_valid(dev->params.wake_pin)) {
         DEBUG_DEV("Setting nWAKE pin high", dev);
         gpio_set(dev->params.wake_pin);
     }
@@ -377,7 +378,7 @@ int ccs811_power_up (ccs811_t *dev)
 {
     ASSERT_PARAM(dev != NULL);
 
-    if (dev->params.wake_pin != GPIO_UNDEF) {
+    if (gpio_is_valid(dev->params.wake_pin)) {
         DEBUG_DEV("Setting nWAKE pin low", dev);
         gpio_clear(dev->params.wake_pin);
     }
@@ -485,12 +486,12 @@ static int _reg_read(const ccs811_t *dev, uint8_t reg, uint8_t *data, uint32_t l
     int res = CCS811_OK;
 
     if (i2c_acquire(dev->params.i2c_dev) != CCS811_OK) {
-        DEBUG_DEV("could not aquire I2C bus", dev);
+        DEBUG_DEV("could not acquire I2C bus", dev);
         return -CCS811_ERROR_I2C;
     }
 
 #if MODULE_CCS811_FULL
-    if (dev->params.wake_pin != GPIO_UNDEF) {
+    if (gpio_is_valid(dev->params.wake_pin)) {
         /* wake the sensor with low active WAKE signal */
         gpio_clear(dev->params.wake_pin);
         /* t_WAKE is 50 us */
@@ -502,7 +503,7 @@ static int _reg_read(const ccs811_t *dev, uint8_t reg, uint8_t *data, uint32_t l
     i2c_release(dev->params.i2c_dev);
 
 #if MODULE_CCS811_FULL
-    if (dev->params.wake_pin != GPIO_UNDEF) {
+    if (gpio_is_valid(dev->params.wake_pin)) {
         /* let the sensor enter to sleep mode */
         gpio_set(dev->params.wake_pin);
         /* minimum t_DWAKE is 20 us */
@@ -511,7 +512,7 @@ static int _reg_read(const ccs811_t *dev, uint8_t reg, uint8_t *data, uint32_t l
 #endif
 
     if (res == CCS811_OK) {
-        if (ENABLE_DEBUG) {
+        if (IS_ACTIVE(ENABLE_DEBUG)) {
             printf("[ccs811] %s dev=%d addr=%02x: read following bytes: ",
                    __func__, dev->params.i2c_dev, dev->params.i2c_addr);
             for (unsigned i = 0; i < len; i++) {
@@ -536,7 +537,7 @@ static int _reg_write(const ccs811_t *dev, uint8_t reg, uint8_t *data, uint32_t 
 
     int res = CCS811_OK;
 
-    if (ENABLE_DEBUG && data && len) {
+    if (IS_ACTIVE(ENABLE_DEBUG) && data && len) {
         printf("[css811] %s dev=%d addr=%02x: write following bytes: ",
                __func__, dev->params.i2c_dev, dev->params.i2c_addr);
         for (unsigned i = 0; i < len; i++) {
@@ -546,12 +547,12 @@ static int _reg_write(const ccs811_t *dev, uint8_t reg, uint8_t *data, uint32_t 
     }
 
     if (i2c_acquire(dev->params.i2c_dev)) {
-        DEBUG_DEV("could not aquire I2C bus", dev);
+        DEBUG_DEV("could not acquire I2C bus", dev);
         return -CCS811_ERROR_I2C;
     }
 
 #if MODULE_CCS811_FULL
-    if (dev->params.wake_pin != GPIO_UNDEF) {
+    if (gpio_is_valid(dev->params.wake_pin)) {
         /* wake the sensor with low active WAKE signal */
         gpio_clear(dev->params.wake_pin);
         /* t_WAKE is 50 us */
@@ -568,7 +569,7 @@ static int _reg_write(const ccs811_t *dev, uint8_t reg, uint8_t *data, uint32_t 
     i2c_release(dev->params.i2c_dev);
 
 #if MODULE_CCS811_FULL
-    if (dev->params.wake_pin != GPIO_UNDEF) {
+    if (gpio_is_valid(dev->params.wake_pin)) {
         /* let the sensor enter to sleep mode */
         gpio_set(dev->params.wake_pin);
         /* minimum t_DWAKE is 20 us */

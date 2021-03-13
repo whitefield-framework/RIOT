@@ -17,51 +17,34 @@
  * @author      Hauke Petersen <hauke.petersen@fu-berlin.de>
  * @author      Dimitri Nahm <dimitri.nahm@haw-hamburg.de>
  * @author      Semjon Kerner <semjon.kerner@fu-berlin.de>
+ * @author      José I. Alamos <jose.alamos@haw-hamburg.de>
  * @}
  */
 
+#include <assert.h>
 #include <string.h>
 #include <errno.h>
 
 #include "cpu.h"
-#include "luid.h"
 #include "mutex.h"
+#include "nrf_clock.h"
 
 #include "net/ieee802154.h"
 #include "periph/timer.h"
 #include "net/netdev/ieee802154.h"
 #include "nrf802154.h"
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG        0
 #include "debug.h"
 
 static const netdev_driver_t nrf802154_netdev_driver;
 
-netdev_ieee802154_t nrf802154_dev = {
-    {
-        .driver = &nrf802154_netdev_driver,
-        .event_callback = NULL,
-        .context = NULL,
-    },
-#ifdef MODULE_GNRC
-#ifdef MODULE_GNRC_SIXLOWPAN
-    .proto = GNRC_NETTYPE_SIXLOWPAN,
-#else
-    .proto = GNRC_NETTYPE_UNDEF,
-#endif
-#endif
-    .pan = IEEE802154_DEFAULT_PANID,
-    .short_addr = { 0, 0 },
-    .long_addr = { 0, 0, 0, 0, 0, 0, 0, 0 },
-    .chan = IEEE802154_DEFAULT_CHANNEL,
-    .flags = 0
-};
-
 static uint8_t rxbuf[IEEE802154_FRAME_LEN_MAX + 3]; /* len PHR + PSDU + LQI */
 static uint8_t txbuf[IEEE802154_FRAME_LEN_MAX + 3]; /* len PHR + PSDU + LQI */
+static netdev_ieee802154_t *nrf802154_dev;
 
 #define ED_RSSISCALE        (4U)
-#define ED_RSSIOFFS         (92U)
+#define ED_RSSIOFFS         (-92)
 
 #define RX_COMPLETE         (0x1)
 #define TX_COMPLETE         (0x2)
@@ -121,6 +104,63 @@ static void _enable_tx(void)
 }
 
 /**
+ * @brief   Convert from dBm to the internal representation, when the
+ *          radio operates as a IEEE802.15.4 transceiver.
+ */
+static inline uint8_t _dbm_to_ieee802154_hwval(int8_t dbm)
+{
+    return ((dbm - ED_RSSIOFFS) / ED_RSSISCALE);
+}
+
+/**
+ * @brief   Convert from the internal representation to dBm, when the
+ *          radio operates as a IEEE802.15.4 transceiver.
+ */
+static inline int8_t _hwval_to_ieee802154_dbm(uint8_t hwval)
+{
+    return (ED_RSSISCALE * hwval) + ED_RSSIOFFS;
+}
+
+/**
+ * @brief   Get CCA threshold value in internal represetion
+ */
+static int _get_cca_thresh(void)
+{
+    return (NRF_RADIO->CCACTRL & RADIO_CCACTRL_CCAEDTHRES_Msk) >>
+            RADIO_CCACTRL_CCAEDTHRES_Pos;
+}
+
+/**
+ * @brief   Set CCA threshold value in internal represetion
+ */
+static void _set_cca_thresh(uint8_t thresh)
+{
+    NRF_RADIO->CCACTRL &= ~RADIO_CCACTRL_CCAEDTHRES_Msk;
+    NRF_RADIO->CCACTRL |= thresh << RADIO_CCACTRL_CCAEDTHRES_Pos;
+}
+
+/**
+ * @brief   Check whether the channel is clear or not
+ * @note    So far only CCA with Energy Detection is supported (CCA_MODE=1).
+ */
+static bool _channel_is_clear(void)
+{
+    NRF_RADIO->CCACTRL |= RADIO_CCACTRL_CCAMODE_EdMode;
+    NRF_RADIO->EVENTS_CCAIDLE = 0;
+    NRF_RADIO->EVENTS_CCABUSY = 0;
+    NRF_RADIO->TASKS_CCASTART = 1;
+
+    for(;;) {
+        if(NRF_RADIO->EVENTS_CCAIDLE) {
+            return true;
+        }
+        if(NRF_RADIO->EVENTS_CCABUSY) {
+            return false;
+        }
+    }
+}
+
+/**
  * @brief   Reset the RXIDLE state
  */
  static void _reset_rx(void)
@@ -140,7 +180,7 @@ static void _set_chan(uint16_t chan)
     /* Channel map between 2400 MHZ ... 2500 MHz
      * -> Frequency = 2400 + FREQUENCY (MHz) */
     NRF_RADIO->FREQUENCY = (chan - 10) * 5;
-    nrf802154_dev.chan = chan;
+    nrf802154_dev->chan = chan;
 }
 
 static int16_t _get_txpower(void)
@@ -154,10 +194,10 @@ static int16_t _get_txpower(void)
 
 static void _set_txpower(int16_t txpower)
 {
-    if (txpower > 8) {
-        NRF_RADIO->TXPOWER = RADIO_TXPOWER_TXPOWER_Pos8dBm;
+    if (txpower > (int)RADIO_TXPOWER_TXPOWER_Max) {
+        NRF_RADIO->TXPOWER = RADIO_TXPOWER_TXPOWER_Max;
     }
-    if (txpower > 1) {
+    else if (txpower > 1) {
         NRF_RADIO->TXPOWER = (uint32_t)txpower;
     }
     else if (txpower > -1) {
@@ -208,6 +248,11 @@ static int _init(netdev_t *dev)
     txbuf[0] = 0;
     _state = 0;
 
+    /* the radio need the external HF clock source to be enabled */
+    /* @todo    add proper handling to release the clock whenever the radio is
+     *          idle */
+    clock_hfxo_request();
+
     /* power on peripheral */
     NRF_RADIO->POWER = 1;
 
@@ -236,12 +281,14 @@ static int _init(netdev_t *dev)
     NRF_RADIO->MODECNF0 |= RADIO_MODECNF0_RU_Msk;
 
     /* assign default addresses */
-    luid_get(nrf802154_dev.long_addr, IEEE802154_LONG_ADDRESS_LEN);
-    memcpy(nrf802154_dev.short_addr, &nrf802154_dev.long_addr[6],
-           IEEE802154_SHORT_ADDRESS_LEN);
+    netdev_ieee802154_setup(nrf802154_dev);
 
+    nrf802154_dev->chan = CONFIG_IEEE802154_DEFAULT_CHANNEL;
     /* set default channel */
-    _set_chan(nrf802154_dev.chan);
+    _set_chan(nrf802154_dev->chan);
+
+    /* set default CCA threshold */
+    _set_cca_thresh(CONFIG_NRF802154_CCA_THRESH_DEFAULT);
 
     /* configure some shortcuts */
     NRF_RADIO->SHORTS = RADIO_SHORTS_RXREADY_START_Msk | RADIO_SHORTS_TXREADY_START_Msk;
@@ -336,11 +383,11 @@ static int _recv(netdev_t *dev, void *buf, size_t len, void *info)
             radio_info->lqi = (uint8_t)(hwlqi > UINT8_MAX/ED_RSSISCALE
                                        ? UINT8_MAX
                                        : hwlqi * ED_RSSISCALE);
-            /* Calculate RSSI by substracting the offset from the datasheet.
+            /* Calculate RSSI by subtracting the offset from the datasheet.
              * Intentionally using a different calculation than the one from
              * figure 122 of the v1.1 product specification. This appears to
              * match real world performance better */
-            radio_info->rssi = (int16_t)hwlqi - ED_RSSIOFFS;
+            radio_info->rssi = (int16_t)hwlqi + ED_RSSIOFFS;
         }
     }
 
@@ -351,14 +398,14 @@ static int _recv(netdev_t *dev, void *buf, size_t len, void *info)
 
 static void _isr(netdev_t *dev)
 {
-    if (!nrf802154_dev.netdev.event_callback) {
+    if (!nrf802154_dev->netdev.event_callback) {
         return;
     }
     if (_state & RX_COMPLETE) {
-        nrf802154_dev.netdev.event_callback(dev, NETDEV_EVENT_RX_COMPLETE);
+        nrf802154_dev->netdev.event_callback(dev, NETDEV_EVENT_RX_COMPLETE);
     }
     if (_state & TX_COMPLETE) {
-        nrf802154_dev.netdev.event_callback(dev, NETDEV_EVENT_TX_COMPLETE);
+        nrf802154_dev->netdev.event_callback(dev, NETDEV_EVENT_TX_COMPLETE);
         _state &= ~TX_COMPLETE;
     }
 }
@@ -376,13 +423,20 @@ static int _get(netdev_t *dev, netopt_t opt, void *value, size_t max_len)
     switch (opt) {
         case NETOPT_CHANNEL:
             assert(max_len >= sizeof(uint16_t));
-            *((uint16_t *)value) = nrf802154_dev.chan;
+            *((uint16_t *)value) = nrf802154_dev->chan;
             return sizeof(uint16_t);
         case NETOPT_TX_POWER:
             assert(max_len >= sizeof(int16_t));
             *((int16_t *)value) = _get_txpower();
             return sizeof(int16_t);
-
+        case NETOPT_IS_CHANNEL_CLR:
+            assert(max_len >= sizeof(netopt_enable_t));
+            *((netopt_enable_t*)value) = _channel_is_clear();
+            return sizeof(netopt_enable_t);
+        case NETOPT_CCA_THRESHOLD:
+            assert(max_len >= sizeof(int8_t));
+            *((int8_t*)value) = _hwval_to_ieee802154_dbm(_get_cca_thresh());
+            return sizeof(netopt_enable_t);
         default:
             return netdev_ieee802154_get((netdev_ieee802154_t *)dev,
                                           opt, value, max_len);
@@ -400,6 +454,7 @@ static int _set(netdev_t *dev, netopt_t opt,
     DEBUG("[nrf802154] set: %d\n", opt);
 #endif
 
+    int8_t tmp;
     switch (opt) {
         case NETOPT_CHANNEL:
             assert(value_len == sizeof(uint16_t));
@@ -409,7 +464,15 @@ static int _set(netdev_t *dev, netopt_t opt,
             assert(value_len == sizeof(int16_t));
             _set_txpower(*((int16_t *)value));
             return sizeof(int16_t);
-
+        case NETOPT_CCA_THRESHOLD:
+            assert(value_len == sizeof(int8_t));
+            tmp = *((int8_t*) value);
+            /* ED offset cannot be less than the min RSSI offset */
+            if ((tmp - ED_RSSIOFFS) < 0) {
+                return -EINVAL;
+            }
+            _set_cca_thresh(_dbm_to_ieee802154_hwval(tmp));
+            return sizeof(int8_t);
         default:
             return netdev_ieee802154_set((netdev_ieee802154_t *)dev,
                                           opt, value, value_len);
@@ -427,9 +490,9 @@ void isr_radio(void)
         switch(state) {
             case RADIO_STATE_STATE_RxIdle:
                 /* only process packet if event callback is set and CRC is valid */
-                if ((nrf802154_dev.netdev.event_callback) &&
+                if ((nrf802154_dev->netdev.event_callback) &&
                     (NRF_RADIO->CRCSTATUS == 1) &&
-                    (netdev_ieee802154_dst_filter(&nrf802154_dev,
+                    (netdev_ieee802154_dst_filter(nrf802154_dev,
                                                   &rxbuf[1]) == 0)) {
                     _state |= RX_COMPLETE;
                 }
@@ -449,7 +512,7 @@ void isr_radio(void)
                 DEBUG("[nrf802154] Unhandled state: %x\n", (uint8_t)NRF_RADIO->STATE);
         }
         if (_state) {
-            nrf802154_dev.netdev.event_callback(&nrf802154_dev.netdev, NETDEV_EVENT_ISR);
+            netdev_trigger_event_isr(&nrf802154_dev->netdev);
         }
     }
     else {
@@ -457,6 +520,17 @@ void isr_radio(void)
     }
 
     cortexm_isr_end();
+}
+
+void nrf802154_setup(nrf802154_t *dev)
+{
+    netdev_t *netdev = (netdev_t*) dev;
+    netdev_ieee802154_t *netdev_ieee802154 = (netdev_ieee802154_t*) dev;
+    nrf802154_dev = netdev_ieee802154;
+
+    netdev->driver = &nrf802154_netdev_driver;
+    netdev_register(netdev, NETDEV_NRF802154, 0);
+    netdev_ieee802154_reset(netdev_ieee802154);
 }
 
 /**

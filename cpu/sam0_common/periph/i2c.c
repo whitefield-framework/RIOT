@@ -22,6 +22,7 @@
  * @}
  */
 
+#include <assert.h>
 #include <stdint.h>
 #include <errno.h>
 
@@ -34,7 +35,7 @@
 #include "sched.h"
 #include "thread.h"
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG        0
 #include "debug.h"
 
 #define SAMD21_I2C_TIMEOUT  (65535)
@@ -44,7 +45,7 @@
 #define BUSSTATE_OWNER SERCOM_I2CM_STATUS_BUSSTATE(2)
 #define BUSSTATE_BUSY SERCOM_I2CM_STATUS_BUSSTATE(3)
 
-#if defined(CPU_SAML21) || defined(CPU_SAML1X)
+#if defined(CPU_COMMON_SAML21) || defined(CPU_COMMON_SAML1X) || defined(CPU_COMMON_SAMD5X)
 #define SERCOM_I2CM_CTRLA_MODE_I2C_MASTER SERCOM_I2CM_CTRLA_MODE(5)
 #endif
 
@@ -72,43 +73,51 @@ static inline SercomI2cm *bus(i2c_t dev)
     return i2c_config[dev].dev;
 }
 
+static void _syncbusy(SercomI2cm *dev)
+{
+#ifdef SERCOM_I2CM_STATUS_SYNCBUSY
+    while (dev->STATUS.bit.SYNCBUSY) {}
+#else
+    while (dev->SYNCBUSY.reg) {}
+#endif
+}
+
+static void _reset(SercomI2cm *dev)
+{
+    dev->CTRLA.reg |= SERCOM_SPI_CTRLA_SWRST;
+    while (dev->CTRLA.reg & SERCOM_SPI_CTRLA_SWRST) {}
+
+#ifdef SERCOM_I2CM_STATUS_SYNCBUSY
+    while (dev->STATUS.bit.SYNCBUSY) {}
+#else
+    while (dev->SYNCBUSY.bit.SWRST) {}
+#endif
+}
+
 void i2c_init(i2c_t dev)
 {
     uint32_t timeout_counter = 0;
     int32_t tmp_baud;
 
     assert(dev < I2C_NUMOF);
+
+    const uint32_t fSCL = i2c_config[dev].speed;
+    const uint32_t fGCLK = sam0_gclk_freq(i2c_config[dev].gclk_src);
+
     /* Initialize mutex */
     mutex_init(&locks[dev]);
+
     /* DISABLE I2C MASTER */
     _i2c_poweroff(dev);
 
     /* Reset I2C */
-    bus(dev)->CTRLA.reg = SERCOM_I2CM_CTRLA_SWRST;
-    while (bus(dev)->SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_MASK) {}
+    _reset(bus(dev));
 
     /* Turn on power manager for sercom */
     sercom_clk_en(bus(dev));
 
     /* I2C using CLK GEN 0 */
-    sercom_set_gen(bus(dev),i2c_config[dev].gclk_src);
-#if defined(CPU_FAM_SAML21) || defined(CPU_FAM_SAMR30)
-    /* GCLK_ID_SLOW is shared for SERCOM[0..4] */
-    GCLK->PCHCTRL[(sercom_id(bus(dev)) < 5 ?
-                  SERCOM0_GCLK_ID_SLOW : SERCOM5_GCLK_ID_SLOW)].reg =
-    (GCLK_PCHCTRL_CHEN | i2c_config[dev].gclk_src  );
-    while (GCLK->SYNCBUSY.bit.GENCTRL) {}
-#elif defined (CPU_SAML1X)
-    GCLK->PCHCTRL[SERCOM0_GCLK_ID_SLOW].reg = (GCLK_PCHCTRL_CHEN |
-                                              i2c_config[dev].gclk_src  );
-     while (GCLK->SYNCBUSY.bit.GENCTRL0) {}
-#else
-    /* GCLK_SERCOMx_SLOW is shared for all sercom */
-    GCLK->CLKCTRL.reg = (GCLK_CLKCTRL_CLKEN |
-                         i2c_config[dev].gclk_src |
-                         SERCOM0_GCLK_ID_SLOW);
-    while (GCLK->STATUS.bit.SYNCBUSY) {}
-#endif
+    sercom_set_gen(bus(dev), i2c_config[dev].gclk_src);
 
     /* Check if module is enabled. */
     if (bus(dev)->CTRLA.reg & SERCOM_I2CM_CTRLA_ENABLE) {
@@ -126,41 +135,52 @@ void i2c_init(i2c_t dev)
     gpio_init_mux(i2c_config[dev].scl_pin, i2c_config[dev].mux);
 
     /* I2C CONFIGURATION */
-    while (bus(dev)->SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_MASK) {}
+    _syncbusy(bus(dev));
 
     /* Set sercom module to operate in I2C master mode and run in Standby
-    if user requests it */
-    bus(dev)->CTRLA.reg = SERCOM_I2CM_CTRLA_MODE_I2C_MASTER |
-                          ((i2c_config[dev].flags & I2C_FLAG_RUN_STANDBY) ?
+       if user requests it */
+    bus(dev)->CTRLA.reg = SERCOM_I2CM_CTRLA_MODE_I2C_MASTER
+                        | ((i2c_config[dev].flags & I2C_FLAG_RUN_STANDBY) ?
                            SERCOM_I2CM_CTRLA_RUNSTDBY : 0);
 
     /* Enable Smart Mode (ACK is sent when DATA.DATA is read) */
     bus(dev)->CTRLB.reg = SERCOM_I2CM_CTRLB_SMEN;
 
-    /* Find and set baudrate. Read speed configuration. Set transfer
-     * speed: SERCOM_I2CM_CTRLA_SPEED(0): Standard-mode (Sm) up to 100
-     * kHz and Fast-mode (Fm) up to 400 kHz */
-    switch (i2c_config[dev].speed) {
-        case I2C_SPEED_NORMAL:
-        case I2C_SPEED_FAST:
-            bus(dev)->CTRLA.reg |= SERCOM_I2CM_CTRLA_SPEED(0);
-            break;
-        case I2C_SPEED_HIGH:
-            bus(dev)->CTRLA.reg |= SERCOM_I2CM_CTRLA_SPEED(2);
-            break;
-        default:
-            DEBUG("BAD BAUDRATE\n");
-            return;
+    /* Set SPEED */
+#ifdef SERCOM_I2CM_CTRLA_SPEED
+    /* > 1000 kHz */
+    if (fSCL > I2C_SPEED_FAST_PLUS) {
+        bus(dev)->CTRLA.reg |= SERCOM_I2CM_CTRLA_SPEED(2);
+    /* > 400 kHz */
+    } else if (fSCL > I2C_SPEED_FAST) {
+        bus(dev)->CTRLA.reg |= SERCOM_I2CM_CTRLA_SPEED(1);
+    /* ≤ 400 kHz */
+    } else {
+        bus(dev)->CTRLA.reg |= SERCOM_I2CM_CTRLA_SPEED(0);
     }
+#else
+    assert(fSCL < I2C_SPEED_FAST_PLUS);
+#endif
+
     /* Get the baudrate */
-    tmp_baud = (int32_t)(((CLOCK_CORECLOCK +
-               (2 * (i2c_config[dev].speed)) - 1) /
-               (2 * (i2c_config[dev].speed))) -
-               (i2c_config[dev].speed == I2C_SPEED_HIGH ? 1 : 5));
+    /* fSCL = fGCLK / (10 + 2 * BAUD)  -> BAUD   = fGCLK / (2 * fSCL) - 5 */
+    /* fSCL = fGCLK / (2 + 2 * HSBAUD) -> HSBAUD = fGCLK / (2 * fSCL) - 1 */
+    tmp_baud = (fGCLK + (2 * fSCL) - 1) /* round up */
+             / (2 * fSCL)
+             - (fSCL > I2C_SPEED_FAST_PLUS ? 1 : 5);
+
     /* Ensure baudrate is within limits */
-    if (tmp_baud < 255 && tmp_baud > 0) {
+    assert(tmp_baud < 255 && tmp_baud > 0);
+
+#ifdef SERCOM_I2CM_BAUD_HSBAUD
+    if (fSCL > I2C_SPEED_FAST_PLUS) {
+        bus(dev)->BAUD.reg = SERCOM_I2CM_BAUD_HSBAUD(tmp_baud);
+    } else
+#endif
+    {
         bus(dev)->BAUD.reg = SERCOM_I2CM_BAUD_BAUD(tmp_baud);
     }
+
     /* ENABLE I2C MASTER */
     _i2c_poweron(dev);
 
@@ -181,12 +201,36 @@ int i2c_acquire(i2c_t dev)
     return 0;
 }
 
-int i2c_release(i2c_t dev)
+void i2c_release(i2c_t dev)
 {
     assert(dev < I2C_NUMOF);
     mutex_unlock(&locks[dev]);
-    return 0;
 }
+
+#ifdef MODULE_PERIPH_I2C_RECONFIGURE
+void i2c_init_pins(i2c_t dev)
+{
+    assert(dev < I2C_NUMOF);
+
+    _i2c_poweron(dev);
+
+    gpio_init_mux(i2c_config[dev].scl_pin, i2c_config[dev].mux);
+    gpio_init_mux(i2c_config[dev].sda_pin, i2c_config[dev].mux);
+
+    mutex_unlock(&locks[dev]);
+}
+
+void i2c_deinit_pins(i2c_t dev)
+{
+    assert(dev < I2C_NUMOF);
+
+    mutex_lock(&locks[dev]);
+    _i2c_poweroff(dev);
+
+    gpio_disable_mux(i2c_config[dev].sda_pin);
+    gpio_disable_mux(i2c_config[dev].scl_pin);
+}
+#endif
 
 int i2c_read_bytes(i2c_t dev, uint16_t addr,
                    void *data, size_t len, uint8_t flags)
@@ -263,7 +307,7 @@ void _i2c_poweron(i2c_t dev)
         return;
     }
     bus(dev)->CTRLA.bit.ENABLE = 1;
-    while (bus(dev)->SYNCBUSY.bit.ENABLE) {}
+    _syncbusy(bus(dev));
 }
 
 void _i2c_poweroff(i2c_t dev)
@@ -274,21 +318,21 @@ void _i2c_poweroff(i2c_t dev)
         return;
     }
     bus(dev)->CTRLA.bit.ENABLE = 0;
-    while (bus(dev)->SYNCBUSY.bit.ENABLE) {}
+    _syncbusy(bus(dev));
 }
 
 static int _start(SercomI2cm *dev, uint16_t addr)
 {
     /* Wait for hardware module to sync */
     DEBUG("Wait for device to be ready\n");
-    while (dev->SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_MASK) {}
+    _syncbusy(dev);
 
     /* Set action to ACK. */
     dev->CTRLB.reg &= ~SERCOM_I2CM_CTRLB_ACKACT;
 
     /* Send Start | Address | Write/Read */
     DEBUG("Generate start condition by sending address\n");
-    dev->ADDR.reg = (addr) | (0 << SERCOM_I2CM_ADDR_HS_Pos);
+    dev->ADDR.reg = addr;
 
     /* Wait for response on bus. */
     if (addr & I2C_READ) {
@@ -340,7 +384,7 @@ static inline int _write(SercomI2cm *dev, const uint8_t *data, int length,
         }
 
         /* Wait for hardware module to sync */
-        while (dev->SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_MASK) {}
+        _syncbusy(dev);
 
         DEBUG("Written byte #%i to data reg, now waiting for DR"
               " to be empty again\n", count);
@@ -382,7 +426,8 @@ static inline int _read(SercomI2cm *dev, uint8_t *data, int length,
         }
 
         /* Wait for hardware module to sync */
-        while (dev->SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_MASK) {}
+        _syncbusy(dev);
+
         /* Check if this is the last byte to read */
         if (length == 0 && stop) {
             /* Send NACK before STOP */
@@ -407,7 +452,7 @@ static inline int _read(SercomI2cm *dev, uint8_t *data, int length,
 static inline void _stop(SercomI2cm *dev)
 {
     /* Wait for hardware module to sync */
-    while (dev->SYNCBUSY.reg & SERCOM_I2CM_SYNCBUSY_MASK) {}
+    _syncbusy(dev);
     /* Stop command */
     dev->CTRLB.reg |= SERCOM_I2CM_CTRLB_CMD(3);
     DEBUG("Stop sent\n");

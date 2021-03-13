@@ -19,7 +19,7 @@
 #include "net/gnrc/sixlowpan/ctx.h"
 #include "xtimer.h"
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 static gnrc_sixlowpan_ctx_t _ctxs[GNRC_SIXLOWPAN_CTX_SIZE];
@@ -57,15 +57,15 @@ gnrc_sixlowpan_ctx_t *gnrc_sixlowpan_ctx_lookup_addr(const ipv6_addr_t *addr)
 
     mutex_unlock(&_ctx_mutex);
 
-#if ENABLE_DEBUG
-    if (res != NULL) {
-        DEBUG("6lo ctx: found context (%u, %s/%" PRIu8 ") ",
-              (res->flags_id & GNRC_SIXLOWPAN_CTX_FLAGS_CID_MASK),
-              ipv6_addr_to_str(ipv6str, &res->prefix, sizeof(ipv6str)),
-              res->prefix_len);
-        DEBUG("for address %s\n", ipv6_addr_to_str(ipv6str, addr, sizeof(ipv6str)));
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
+        if (res != NULL) {
+            DEBUG("6lo ctx: found context (%u, %s/%" PRIu8 ") ",
+                (res->flags_id & GNRC_SIXLOWPAN_CTX_FLAGS_CID_MASK),
+                ipv6_addr_to_str(ipv6str, &res->prefix, sizeof(ipv6str)),
+                res->prefix_len);
+            DEBUG("for address %s\n", ipv6_addr_to_str(ipv6str, addr, sizeof(ipv6str)));
+        }
     }
-#endif
 
     return res;
 }

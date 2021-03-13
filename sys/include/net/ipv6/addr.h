@@ -202,7 +202,7 @@ typedef union {
  *      </a>
  */
 /**
- * @brief   The address is transient, i.e. not well-known, permanantly
+ * @brief   The address is transient, i.e. not well-known, permanently
  *          assigned address by IANA.
  */
 #define IPV6_ADDR_MCAST_FLAG_TRANSIENT      (0x01)
@@ -687,7 +687,7 @@ static inline void ipv6_addr_set_all_routers_multicast(ipv6_addr_t *addr, unsign
  */
 static inline void ipv6_addr_set_solicited_nodes(ipv6_addr_t *out, const ipv6_addr_t *in)
 {
-    out->u64[0] = byteorder_htonll(0xff02000000000000);
+    out->u64[0] = byteorder_htonll(0xff02000000000000ull);
     out->u32[2] = byteorder_htonl(1);
     out->u8[12] = 0xff;
     out->u8[13] = in->u8[13];
@@ -720,8 +720,8 @@ char *ipv6_addr_to_str(char *result, const ipv6_addr_t *addr, uint8_t result_len
  *          RFC 5952
  *      </a>
  *
- * @param[in] result    The resulting byte representation
- * @param[in] addr      An IPv6 address string representation
+ * @param[out] result    The resulting byte representation
+ * @param[in] addr       An IPv6 address string representation
  *
  * @return  @p result, on success
  * @return  NULL, if @p addr was malformed
@@ -730,18 +730,53 @@ char *ipv6_addr_to_str(char *result, const ipv6_addr_t *addr, uint8_t result_len
 ipv6_addr_t *ipv6_addr_from_str(ipv6_addr_t *result, const char *addr);
 
 /**
- * @brief split IPv6 address string representation
+ * @brief   Converts an IPv6 address from a buffer of characters to a
+ *          byte-represented IPv6 address
  *
- * @note Will change @p seperator position in @p addr_str to '\0'
+ * @see <a href="https://tools.ietf.org/html/rfc5952">
+ *          RFC 5952
+ *      </a>
+ *
+ * @note    @p addr_len should be between 0 and IPV6_ADDR_MAX_STR_LEN
+ *
+ * @param[out] result    The resulting byte representation
+ * @param[in] addr       An IPv6 address string representation
+ * @param[in] addr_len   The amount of characters to parse
+ *
+ * @return  @p result, on success
+ * @return  NULL, if @p addr was malformed
+ * @return  NULL, if @p result or @p addr was NULL
+ */
+ipv6_addr_t *ipv6_addr_from_buf(ipv6_addr_t *result, const char *addr,
+                                size_t addr_len);
+
+/**
+ * @brief split IPv6 address string representation and return remaining string
+ *
+ * Will change @p separator position in @p addr_str to '\0'
  *
  * @param[in,out]   addr_str    Address to split
- * @param[in]       seperator   Seperator char to use
+ * @param[in]       separator   Separator char to use
+ *
+ * @return      string following the first occurrence of @p separator in
+ *              @p addr_str.
+ * @return      NULL if @p separator was not found.
+ */
+char *ipv6_addr_split_str(char *addr_str, char separator);
+
+/**
+ * @brief split IPv6 address string representation
+ *
+ * @note Will change @p separator position in @p addr_str to '\0'
+ *
+ * @param[in,out]   addr_str    Address to split
+ * @param[in]       separator   Separator char to use
  * @param[in]       _default    Default value
  *
  * @return      atoi(string after split)
- * @return      @p _default if no string after @p seperator
+ * @return      @p _default if no string after @p separator
  */
-int ipv6_addr_split(char *addr_str, char seperator, int _default);
+int ipv6_addr_split_int(char *addr_str, char separator, int _default);
 
 /**
  * @brief split IPv6 prefix string representation
@@ -753,7 +788,7 @@ int ipv6_addr_split(char *addr_str, char seperator, int _default);
  */
 static inline int ipv6_addr_split_prefix(char *addr_str)
 {
-    return ipv6_addr_split(addr_str, '/', 128);
+    return ipv6_addr_split_int(addr_str, '/', 128);
 }
 
 /**
@@ -762,11 +797,12 @@ static inline int ipv6_addr_split_prefix(char *addr_str)
  * E.g., "fe80::1%5" returns "5", changes @p addr_str to "fe80::1"
  *
  * @param[in,out]   addr_str Address to split
- * @return          interface number or -1 if none specified
+ * @return          string containing the interface specifier.
+ * @return          NULL if no interface was specified.
  */
-static inline int ipv6_addr_split_iface(char *addr_str)
+static inline char *ipv6_addr_split_iface(char *addr_str)
 {
-    return ipv6_addr_split(addr_str, '%', -1);
+    return ipv6_addr_split_str(addr_str, '%');
 }
 
 /**

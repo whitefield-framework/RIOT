@@ -33,11 +33,16 @@
 #include <stdbool.h>
 
 #include "board.h"
-#include "periph/spi.h"
-#include "periph/gpio.h"
+#include "kernel_defines.h"
 #include "net/netdev.h"
 #include "net/netdev/ieee802154.h"
 #include "net/gnrc/nettype.h"
+
+/* we need no peripherals for memory mapped radios */
+#if !defined(MODULE_AT86RFA1) && !defined(MODULE_AT86RFR2)
+#include "periph/spi.h"
+#include "periph/gpio.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -56,13 +61,13 @@ extern "C" {
 /* the AT86RF212B has a sub-1GHz radio */
 #define AT86RF2XX_MIN_CHANNEL           (IEEE802154_CHANNEL_MIN_SUBGHZ)
 #define AT86RF2XX_MAX_CHANNEL           (IEEE802154_CHANNEL_MAX_SUBGHZ)
-#define AT86RF2XX_DEFAULT_CHANNEL       (IEEE802154_DEFAULT_SUBGHZ_CHANNEL)
+#define AT86RF2XX_DEFAULT_CHANNEL       (CONFIG_IEEE802154_DEFAULT_SUBGHZ_CHANNEL)
 /* Page 2 is O-QPSK 100 kbit/s (channel 0), or 250 kbit/s (channels 1-10) */
-#define AT86RF2XX_DEFAULT_PAGE          (IEEE802154_DEFAULT_SUBGHZ_PAGE)
+#define AT86RF2XX_DEFAULT_PAGE          (CONFIG_IEEE802154_DEFAULT_SUBGHZ_PAGE)
 #else
 #define AT86RF2XX_MIN_CHANNEL           (IEEE802154_CHANNEL_MIN)
 #define AT86RF2XX_MAX_CHANNEL           (IEEE802154_CHANNEL_MAX)
-#define AT86RF2XX_DEFAULT_CHANNEL       (IEEE802154_DEFAULT_CHANNEL)
+#define AT86RF2XX_DEFAULT_CHANNEL       (CONFIG_IEEE802154_DEFAULT_CHANNEL)
 /* Only page 0 is supported in the 2.4 GHz band */
 #endif
 /** @} */
@@ -70,7 +75,7 @@ extern "C" {
 /**
  * @brief   Default TX power (0dBm)
  */
-#define AT86RF2XX_DEFAULT_TXPOWER       (IEEE802154_DEFAULT_TXPOWER)
+#define AT86RF2XX_DEFAULT_TXPOWER       (CONFIG_IEEE802154_DEFAULT_TXPOWER)
 
 /**
  * @brief   Base (minimal) RSSI value in dBm
@@ -83,19 +88,10 @@ extern "C" {
  *       for other seetings this value may change.
  */
 #   define RSSI_BASE_VAL                   (-98)
+#elif MODULE_AT86RFA1 || MODULE_AT86RFR2
+#   define RSSI_BASE_VAL                   (-90)
 #else
 #   define RSSI_BASE_VAL                   (-91)
-#endif
-
-/**
- * @brief   Max Receiver sensitivity value in dBm
- */
-#if MODULE_AT86RF233
-#   define MAX_RX_SENSITIVITY              (-52)
-#elif MODULE_AT86RF212B
-#   define MAX_RX_SENSITIVITY              (-54)
-#else
-#   define MAX_RX_SENSITIVITY              (-49)
 #endif
 
 /**
@@ -105,11 +101,13 @@ extern "C" {
 #   define MIN_RX_SENSITIVITY              (-101)
 #elif MODULE_AT86RF212B
 #   define MIN_RX_SENSITIVITY              (-110)
+#elif MODULE_AT86RFA1 || MODULE_AT86RFR2
+#   define MIN_RX_SENSITIVITY              (-100)
 #else
 #   define MIN_RX_SENSITIVITY              (-101)
 #endif
 
-#if defined(DOXYGEN) || defined(MODULE_AT86RF232) || defined(MODULE_AT86RF233)
+#if defined(DOXYGEN) || defined(MODULE_AT86RF232) || defined(MODULE_AT86RF233) || defined(MODULE_AT86RFR2)
 /**
  * @brief   Frame retry counter reporting
  *
@@ -124,6 +122,23 @@ extern "C" {
 #endif
 
 /**
+ * @brief   Random Number Generator
+ *
+ * Most AT86RF radios have the option to use the highest bits of the RSSI
+ * register as a source of randomness.
+ * See Section 11.2 of the at86rf233 reference manual. (RND_VALUE)
+ */
+#if defined(MODULE_AT86RF233) || defined(MODULE_AT86RF231) || defined(MODULE_AT86RFA1) || defined(MODULE_AT86RFR2)
+#ifndef AT86RF2XX_RANDOM_NUMBER_GENERATOR
+#define AT86RF2XX_RANDOM_NUMBER_GENERATOR  (1)
+#endif
+#else
+#ifndef AT86RF2XX_RANDOM_NUMBER_GENERATOR
+#define AT86RF2XX_RANDOM_NUMBER_GENERATOR  (0)
+#endif
+#endif
+
+/**
  * @brief   Smart idle listening feature
  *
  * This feature optimizes radio operation in the listening mode, reducing
@@ -131,7 +146,7 @@ extern "C" {
  * manual recommends to disable this feature for RSSI measurements or random number
  * generation (Section 8.4 and Section 11.2).
  */
-#ifdef MODULE_AT86RF233
+#if defined(MODULE_AT86RF233) || defined(MODULE_AT86RFR2)
 #ifndef AT86RF2XX_SMART_IDLE_LISTENING
 #define AT86RF2XX_SMART_IDLE_LISTENING     (1)
 #endif
@@ -180,6 +195,36 @@ extern "C" {
 
 /** @} */
 
+#if IS_ACTIVE(AT86RF2XX_BASIC_MODE) || defined(DOXYGEN)
+/**
+ * @brief Internal radio state equivalent to RX_ON
+ */
+#define AT86RF2XX_PHY_STATE_RX       AT86RF2XX_STATE_RX_ON
+/**
+ * @brief Internal radio state equivalent to RX_BUSY
+ */
+#define AT86RF2XX_PHY_STATE_RX_BUSY  AT86RF2XX_STATE_BUSY_RX
+/**
+ * @brief Internal radio state equivalent to TX_ON
+ */
+#define AT86RF2XX_PHY_STATE_TX       AT86RF2XX_STATE_PLL_ON
+/**
+ * @brief Internal radio state equivalent to TX_BUSY
+ */
+#define AT86RF2XX_PHY_STATE_TX_BUSY  AT86RF2XX_STATE_BUSY_TX
+#else
+#define AT86RF2XX_PHY_STATE_RX       AT86RF2XX_STATE_RX_AACK_ON
+#define AT86RF2XX_PHY_STATE_RX_BUSY  AT86RF2XX_STATE_BUSY_RX_AACK
+#define AT86RF2XX_PHY_STATE_TX       AT86RF2XX_STATE_TX_ARET_ON
+#define AT86RF2XX_PHY_STATE_TX_BUSY  AT86RF2XX_STATE_BUSY_TX_ARET
+#endif /* IS_ACTIVE(AT86RF2XX_BASIC_MODE) */
+
+#if defined(MODULE_AT86RFA1) || defined(MODULE_AT86RFR2)
+/**
+ * @brief   memory mapped radio needs no parameters
+ */
+typedef void at86rf2xx_params_t;
+#else
 /**
  * @brief   struct holding all params needed for device initialization
  */
@@ -191,6 +236,7 @@ typedef struct at86rf2xx_params {
     gpio_t sleep_pin;       /**< GPIO pin connected to the sleep pin */
     gpio_t reset_pin;       /**< GPIO pin connected to the reset pin */
 } at86rf2xx_params_t;
+#endif
 
 /**
  * @brief   Device descriptor for AT86RF2XX radio devices
@@ -199,8 +245,19 @@ typedef struct at86rf2xx_params {
  */
 typedef struct {
     netdev_ieee802154_t netdev;             /**< netdev parent struct */
+#if defined(MODULE_AT86RFA1) || defined(MODULE_AT86RFR2)
+    /* ATmega256rfr2 signals transceiver events with different interrupts
+     * they have to be stored to mimic the same flow as external transceiver
+     * Use irq_status to map saved interrupts of SOC transceiver,
+     * as they clear after IRQ callback.
+     *
+     *  irq_status = IRQ_STATUS
+     */
+    uint8_t irq_status;                     /**< save irq status */
+#else
     /* device specific fields */
     at86rf2xx_params_t params;              /**< parameters for initialization */
+#endif
     uint16_t flags;                         /**< Device specific flags */
     uint8_t state;                          /**< current state of the radio */
     uint8_t tx_frame_len;                   /**< length of the current TX frame */
@@ -214,7 +271,7 @@ typedef struct {
                                              return to @ref at86rf2xx_t::idle_state */
 #if AT86RF2XX_HAVE_RETRIES
     /* Only radios with the XAH_CTRL_2 register support frame retry reporting */
-    uint8_t tx_retries;                 /**< Number of NOACK retransmissions */
+    int8_t tx_retries;                  /**< Number of NOACK retransmissions */
 #endif
     /** @} */
 } at86rf2xx_t;
@@ -224,8 +281,10 @@ typedef struct {
  *
  * @param[out] dev          device descriptor
  * @param[in]  params       parameters for device initialization
+ * @param[in]  index        index of @p params in a global parameter struct array.
+ *                          If initialized manually, pass a unique identifier instead.
  */
-void at86rf2xx_setup(at86rf2xx_t *dev, const at86rf2xx_params_t *params);
+void at86rf2xx_setup(at86rf2xx_t *dev, const at86rf2xx_params_t *params, uint8_t index);
 
 /**
  * @brief   Trigger a hardware reset and configure radio with default values
@@ -237,11 +296,12 @@ void at86rf2xx_reset(at86rf2xx_t *dev);
 /**
  * @brief   Get the short address of the given device
  *
- * @param[in] dev           device to read from
+ * @param[in]   dev         device to read from
+ * @param[out]  addr        the short address will be stored here
  *
  * @return                  the currently set (2-byte) short address
  */
-uint16_t at86rf2xx_get_addr_short(const at86rf2xx_t *dev);
+void at86rf2xx_get_addr_short(const at86rf2xx_t *dev, network_uint16_t *addr);
 
 /**
  * @brief   Set the short address of the given device
@@ -249,16 +309,17 @@ uint16_t at86rf2xx_get_addr_short(const at86rf2xx_t *dev);
  * @param[in,out] dev       device to write to
  * @param[in] addr          (2-byte) short address to set
  */
-void at86rf2xx_set_addr_short(at86rf2xx_t *dev, uint16_t addr);
+void at86rf2xx_set_addr_short(at86rf2xx_t *dev, const network_uint16_t *addr);
 
 /**
  * @brief   Get the configured long address of the given device
  *
- * @param[in] dev           device to read from
+ * @param[in]   dev         device to read from
+ * @param[out]  addr        the long address will be stored here
  *
  * @return                  the currently set (8-byte) long address
  */
-uint64_t at86rf2xx_get_addr_long(const at86rf2xx_t *dev);
+void at86rf2xx_get_addr_long(const at86rf2xx_t *dev, eui64_t *addr);
 
 /**
  * @brief   Set the long address of the given device
@@ -266,7 +327,7 @@ uint64_t at86rf2xx_get_addr_long(const at86rf2xx_t *dev);
  * @param[in,out] dev       device to write to
  * @param[in] addr          (8-byte) long address to set
  */
-void at86rf2xx_set_addr_long(at86rf2xx_t *dev, uint64_t addr);
+void at86rf2xx_set_addr_long(at86rf2xx_t *dev, const eui64_t *addr);
 
 /**
  * @brief   Get the configured channel number of the given device
@@ -301,6 +362,39 @@ uint8_t at86rf2xx_get_page(const at86rf2xx_t *dev);
  * @param[in] page          channel page to set
  */
 void at86rf2xx_set_page(at86rf2xx_t *dev, uint8_t page);
+
+/**
+ * @brief   Get the PHY mode of the given device
+ *
+ * @param[in,out] dev       device to read from
+ * @return                  the currently set phy mode
+ */
+uint8_t at86rf2xx_get_phy_mode(at86rf2xx_t *dev);
+
+/**
+ * @brief   Get the current O-QPSK rate mode of the PHY
+ *
+ * @param[in] dev           device to read from
+ *
+ * @return                  the currently set rate mode
+ */
+uint8_t at86rf2xx_get_rate(at86rf2xx_t *dev);
+
+/**
+ * @brief   Set the current O-QPSK rate mode of the PHY
+ *          rate modes > 0 are proprietary.
+ *
+ *          rate 0:   250 kbit/s (IEEE mode)
+ *          rate 1:   500 kbit/s
+ *          rate 2:  1000 kbit/s (compatible with AT86RF215)
+ *          rate 3:  2000 kbit/s
+ *
+ * @param[in] dev           device to write to
+ * @param[in] rate          the selected data rate mode (0-3)
+ *
+ * @return                  0 on success, otherwise error value
+ */
+int at86rf2xx_set_rate(at86rf2xx_t *dev, uint8_t rate);
 
 /**
  * @brief   Get the configured PAN ID of the given device
@@ -348,7 +442,7 @@ void at86rf2xx_set_txpower(const at86rf2xx_t *dev, int16_t txpower);
  *
  * @return                  configured receiver sensitivity in dBm
  */
-int16_t at86rf2xx_get_rxsensitivity(const at86rf2xx_t *dev);
+int8_t at86rf2xx_get_rxsensitivity(const at86rf2xx_t *dev);
 
 /**
  * @brief   Set the receiver sensitivity of the given device [in dBm]
@@ -361,7 +455,7 @@ int16_t at86rf2xx_get_rxsensitivity(const at86rf2xx_t *dev);
  * @param[in] dev           device to write to
  * @param[in] rxsens        rx sensitivity in dBm
  */
-void at86rf2xx_set_rxsensitivity(const at86rf2xx_t *dev, int16_t rxsens);
+void at86rf2xx_set_rxsensitivity(const at86rf2xx_t *dev, int8_t rxsens);
 
 /**
  * @brief   Get the maximum number of retransmissions
@@ -514,7 +608,7 @@ size_t at86rf2xx_tx_load(at86rf2xx_t *dev, const uint8_t *data,
  *
  * @param[in] dev           device to trigger
  */
-void at86rf2xx_tx_exec(const at86rf2xx_t *dev);
+void at86rf2xx_tx_exec(at86rf2xx_t *dev);
 
 /**
  * @brief   Perform one manual channel clear assessment (CCA)

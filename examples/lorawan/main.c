@@ -70,13 +70,10 @@ static void _send_message(void)
     /* Try to send the message */
     uint8_t ret = semtech_loramac_send(&loramac,
                                        (uint8_t *)message, strlen(message));
-    if (ret != SEMTECH_LORAMAC_TX_OK) {
+    if (ret != SEMTECH_LORAMAC_TX_DONE)  {
         printf("Cannot send message '%s', ret code: %d\n", message, ret);
         return;
     }
-    /* The send was successfully scheduled, now wait until the send cycle has
-       completed and a reply is received from the MAC */
-    semtech_loramac_recv(&loramac);
 }
 
 static void *sender(void *arg)
@@ -107,9 +104,9 @@ int main(void)
     puts("=====================================");
 
     /* Convert identifiers and application key */
-    fmt_hex_bytes(deveui, DEVEUI);
-    fmt_hex_bytes(appeui, APPEUI);
-    fmt_hex_bytes(appkey, APPKEY);
+    fmt_hex_bytes(deveui, CONFIG_LORAMAC_DEV_EUI_DEFAULT);
+    fmt_hex_bytes(appeui, CONFIG_LORAMAC_APP_EUI_DEFAULT);
+    fmt_hex_bytes(appkey, CONFIG_LORAMAC_APP_KEY_DEFAULT);
 
     /* Initialize the loramac stack */
     semtech_loramac_init(&loramac);

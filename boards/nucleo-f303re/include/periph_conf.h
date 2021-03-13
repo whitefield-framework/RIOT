@@ -8,9 +8,7 @@
  */
 
 /**
- * @defgroup    boards_nucleo-f303re STM32 Nucleo-F303RE
- * @ingroup     boards_common_nucleo64
- * @brief       Support for the STM32 Nucleo-F303RE
+ * @ingroup     boards_nucleo-f303re
  * @{
  *
  * @file
@@ -23,58 +21,44 @@
 #ifndef PERIPH_CONF_H
 #define PERIPH_CONF_H
 
+/* This board provides an LSE */
+#ifndef CONFIG_BOARD_HAS_LSE
+#define CONFIG_BOARD_HAS_LSE    1
+#endif
+
+/* This board provides an HSE */
+#ifndef CONFIG_BOARD_HAS_HSE
+#define CONFIG_BOARD_HAS_HSE    1
+#endif
+
 #include "periph_cpu.h"
+#include "clk_conf.h"
+#include "cfg_timer_tim2.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @name    Clock settings
+ * @name    ADC configuration
  *
- * @note    This is auto-generated from
- *          `cpu/stm32_common/dist/clk_conf/clk_conf.c`
+ * Note that we do not configure all ADC channels,
+ * and not in the STM32F334 order.  Instead, we
+ * just define 6 ADC channels, for the Nucleo
+ * Arduino header pins A0-A5
+ *
  * @{
  */
-/* give the target core clock (HCLK) frequency [in Hz],
- * maximum: 72MHz */
-#define CLOCK_CORECLOCK     (72000000U)
-/* 0: no external high speed crystal available
- * else: actual crystal frequency [in Hz] */
-#define CLOCK_HSE           (8000000U)
-/* 0: no external low speed crystal available,
- * 1: external crystal available (always 32.768kHz) */
-#define CLOCK_LSE           (1)
-/* peripheral clock setup */
-#define CLOCK_AHB_DIV       RCC_CFGR_HPRE_DIV1
-#define CLOCK_AHB           (CLOCK_CORECLOCK / 1)
-#define CLOCK_APB1_DIV      RCC_CFGR_PPRE1_DIV2     /* max 36MHz */
-#define CLOCK_APB1          (CLOCK_CORECLOCK / 2)
-#define CLOCK_APB2_DIV      RCC_CFGR_PPRE2_DIV1     /* max 72MHz */
-#define CLOCK_APB2          (CLOCK_CORECLOCK / 1)
-
-/* PLL factors */
-#define CLOCK_PLL_PREDIV     (1)
-#define CLOCK_PLL_MUL        (9)
-/** @} */
-
-/**
- * @name   Timer configuration
- * @{
- */
-static const timer_conf_t timer_config[] = {
-    {
-        .dev      = TIM2,
-        .max      = 0xffffffff,
-        .rcc_mask = RCC_APB1ENR_TIM2EN,
-        .bus      = APB1,
-        .irqn     = TIM2_IRQn
-    }
+static const adc_conf_t adc_config[] = {
+    { .pin = GPIO_PIN(PORT_A, 0), .dev = 0, .chan =  1 }, /* ADC1_IN1,  fast */
+    { .pin = GPIO_PIN(PORT_A, 1), .dev = 0, .chan =  2 }, /* ADC1_IN2,  fast */
+    { .pin = GPIO_PIN(PORT_A, 4), .dev = 1, .chan =  1 }, /* ADC2_IN1,  fast */
+    { .pin = GPIO_PIN(PORT_B, 0), .dev = 2, .chan = 12 }, /* ADC3_IN12, slow */
+    { .pin = GPIO_PIN(PORT_C, 1), .dev = 1, .chan =  7 }, /* ADC12_IN7, slow */
+    { .pin = GPIO_PIN(PORT_C, 0), .dev = 1, .chan =  6 }, /* ADC12_IN6, slow */
 };
 
-#define TIMER_0_ISR         isr_tim2
-
-#define TIMER_NUMOF         (sizeof(timer_config) / sizeof(timer_config[0]))
+#define ADC_NUMOF           ARRAY_SIZE(adc_config)
 /** @} */
 
 /**
@@ -118,7 +102,7 @@ static const uart_conf_t uart_config[] = {
 #define UART_1_ISR          (isr_usart1)
 #define UART_2_ISR          (isr_usart3)
 
-#define UART_NUMOF          (sizeof(uart_config) / sizeof(uart_config[0]))
+#define UART_NUMOF          ARRAY_SIZE(uart_config)
 /** @} */
 
 /**
@@ -138,33 +122,13 @@ static const pwm_conf_t pwm_config[] = {
     }
 };
 
-#define PWM_NUMOF           (sizeof(pwm_config) / sizeof(pwm_config[0]))
+#define PWM_NUMOF           ARRAY_SIZE(pwm_config)
 /** @} */
 
 /**
  * @name   SPI configuration
- *
- * @note    The spi_divtable is auto-generated from
- *          `cpu/stm32_common/dist/spi_divtable/spi_divtable.c`
  * @{
  */
-static const uint8_t spi_divtable[2][5] = {
-    {       /* for APB1 @ 36000000Hz */
-        7,  /* -> 140625Hz */
-        6,  /* -> 281250Hz */
-        4,  /* -> 1125000Hz */
-        2,  /* -> 4500000Hz */
-        1   /* -> 9000000Hz */
-    },
-    {       /* for APB2 @ 72000000Hz */
-        7,  /* -> 281250Hz */
-        7,  /* -> 281250Hz */
-        5,  /* -> 1125000Hz */
-        3,  /* -> 4500000Hz */
-        2   /* -> 9000000Hz */
-    }
-};
-
 static const spi_conf_t spi_config[] = {
     {
         .dev      = SPI1,
@@ -172,7 +136,10 @@ static const spi_conf_t spi_config[] = {
         .miso_pin = GPIO_PIN(PORT_A, 6),
         .sclk_pin = GPIO_PIN(PORT_A, 5),
         .cs_pin   = GPIO_PIN(PORT_A, 4),
-        .af       = GPIO_AF5,
+        .mosi_af  = GPIO_AF5,
+        .miso_af  = GPIO_AF5,
+        .sclk_af  = GPIO_AF5,
+        .cs_af    = GPIO_AF5,
         .rccmask  = RCC_APB2ENR_SPI1EN,
         .apbbus   = APB2
     },
@@ -182,7 +149,10 @@ static const spi_conf_t spi_config[] = {
         .miso_pin = GPIO_PIN(PORT_B, 14),
         .sclk_pin = GPIO_PIN(PORT_B, 13),
         .cs_pin   = GPIO_PIN(PORT_B, 12),
-        .af       = GPIO_AF5,
+        .mosi_af  = GPIO_AF5,
+        .miso_af  = GPIO_AF5,
+        .sclk_af  = GPIO_AF5,
+        .cs_af    = GPIO_AF5,
         .rccmask  = RCC_APB1ENR_SPI2EN,
         .apbbus   = APB1
     },
@@ -192,13 +162,16 @@ static const spi_conf_t spi_config[] = {
         .miso_pin = GPIO_PIN(PORT_C, 11),
         .sclk_pin = GPIO_PIN(PORT_C, 10),
         .cs_pin   = GPIO_UNDEF,
-        .af       = GPIO_AF6,
+        .mosi_af  = GPIO_AF6,
+        .miso_af  = GPIO_AF6,
+        .sclk_af  = GPIO_AF6,
+        .cs_af    = GPIO_AF6,
         .rccmask  = RCC_APB1ENR_SPI3EN,
         .apbbus   = APB1
     }
 };
 
-#define SPI_NUMOF           (sizeof(spi_config) / sizeof(spi_config[0]))
+#define SPI_NUMOF           ARRAY_SIZE(spi_config)
 /** @} */
 
 /**
@@ -235,7 +208,7 @@ static const i2c_conf_t i2c_config[] = {
 #define I2C_0_ISR           isr_i2c1_er
 #define I2C_1_ISR           isr_i2c3_er
 
-#define I2C_NUMOF           (sizeof(i2c_config) / sizeof(i2c_config[0]))
+#define I2C_NUMOF           ARRAY_SIZE(i2c_config)
 /** @} */
 
 #ifdef __cplusplus

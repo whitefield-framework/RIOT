@@ -27,7 +27,7 @@
 #include "sht1x.h"
 #include "sht1x_params.h"
 
-#define SHT1X_NUM     (sizeof(sht1x_params) / sizeof(sht1x_params[0]))
+#define SHT1X_NUM     ARRAY_SIZE(sht1x_params)
 
 extern sht1x_dev_t sht1x_devs[SHT1X_NUM];
 
@@ -175,7 +175,7 @@ int _sht_config_handler(int argc, char **argv)
     int dev_num = 0;
 
     if ((argc == 2) && (strcmp("--help", argv[1]) == 0)) {
-        printf("Usage: \"%s [PARMS]\n"
+        printf("Usage: \"%s [PARAMS]\n"
                "\n"
                "Supported parameters:\n"
                "  -d <NUM>\n"
@@ -189,7 +189,7 @@ int _sht_config_handler(int argc, char **argv)
                "\n"
                "  -r l/h\n"
                "    Set resolution to low/high. Low resolution trades "
-               "presicion for speed\n"
+               "precision for speed\n"
                "\n"
                "  -H y/n\n"
                "    Turns heater on/off. Can increase temperature by up to "
@@ -225,14 +225,14 @@ int _sht_config_handler(int argc, char **argv)
                     missing_argument(i - 1, argv);
                     return -1;
                 }
-                temp_off = (int16_t)atoi(argv[i]);
+                temp_off = atoi(argv[i]);
                 break;
             case 'h':
                 if (++i >= argc) {
                     missing_argument(i - 1, argv);
                     return -1;
                 }
-                hum_off = (int16_t)atoi(argv[i]);
+                hum_off = atoi(argv[i]);
                 break;
             case 'r':
                 if (++i >= argc) {

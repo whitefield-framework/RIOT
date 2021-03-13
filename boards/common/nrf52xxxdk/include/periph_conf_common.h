@@ -23,52 +23,49 @@
 
 #include "periph_cpu.h"
 #include "cfg_clock_32_1.h"
+#include "cfg_i2c_default.h"
 #include "cfg_rtt_default.h"
 #include "cfg_timer_default.h"
+
+#include "board.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @name    SPI configuration
- * @{
- */
-static const spi_conf_t spi_config[] = {
-    {
-        .dev  = NRF_SPI0,
-        .sclk = 15,
-        .mosi = 13,
-        .miso = 14
-    }
-};
-
-#define SPI_NUMOF           (sizeof(spi_config) / sizeof(spi_config[0]))
-/** @} */
-
-/**
- * @name    I2C configuration
- * @{
- */
-static const i2c_conf_t i2c_config[] = {
-    {
-        .dev = NRF_TWIM1,
-        .scl = 27,
-        .sda = 26,
-        .speed = I2C_SPEED_NORMAL
-    }
-};
-#define I2C_NUMOF           (sizeof(i2c_config) / sizeof(i2c_config[0]))
-/** @} */
-
-/**
  * @name   PWM configuration
  * @{
  */
 static const pwm_conf_t pwm_config[] = {
-    { NRF_PWM0, { 28, 29, 30, 31 } }
+    { NRF_PWM0, {
+        /* configure LED0 as PWM */
+#ifdef LED0_PIN
+        LED0_PIN,
+#else
+        GPIO_UNDEF,
+#endif
+        /* configure LED1 as PWM */
+#ifdef LED1_PIN
+        LED1_PIN,
+#else
+        GPIO_UNDEF,
+#endif
+        /* configure LED2 as PWM */
+#ifdef LED2_PIN
+        LED2_PIN,
+#else
+        GPIO_UNDEF,
+#endif
+        /* configure LED3 as PWM */
+#ifdef LED3_PIN
+        LED3_PIN,
+#else
+        GPIO_UNDEF,
+#endif
+    } },
 };
-#define PWM_NUMOF           (sizeof(pwm_config) / sizeof(pwm_config[0]))
+#define PWM_NUMOF           ARRAY_SIZE(pwm_config)
 /** @} */
 
 #ifdef __cplusplus

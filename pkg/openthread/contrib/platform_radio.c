@@ -16,7 +16,6 @@
  * @}
  */
 
-#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -25,14 +24,13 @@
 #include "net/ethernet/hdr.h"
 #include "net/ethertype.h"
 #include "net/ieee802154.h"
+#include "net/l2util.h"
 #include "net/netdev/ieee802154.h"
-#include "openthread/config.h"
-#include "openthread/openthread.h"
 #include "openthread/platform/diag.h"
 #include "openthread/platform/radio.h"
 #include "ot.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 #define RADIO_IEEE802154_FCS_LEN    (2U)
@@ -161,7 +159,7 @@ void recv_pkt(otInstance *aInstance, netdev_t *dev)
 
     /* Get RSSI from a radio driver. RSSI should be in [dBm] */
     Rssi = (int8_t)rx_info.rssi;
-    if (ENABLE_DEBUG) {
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
         DEBUG("Received message: len %d\n", (int) sReceiveFrame.mLength);
         for (int i = 0; i < sReceiveFrame.mLength; ++i) {
             DEBUG("%x ", sReceiveFrame.mPsdu[i]);
@@ -210,15 +208,15 @@ void otPlatRadioSetPanId(otInstance *aInstance, uint16_t panid)
 }
 
 /* OpenThread will call this for setting extended address */
-void otPlatRadioSetExtendedAddress(otInstance *aInstance, uint8_t *aExtendedAddress)
+void otPlatRadioSetExtendedAddress(otInstance *aInstance, const otExtAddress *aExtAddress)
 {
     (void)aInstance;
     DEBUG("openthread: otPlatRadioSetExtendedAddress\n");
     char reversed_addr[IEEE802154_LONG_ADDRESS_LEN];
     for (unsigned i = 0; i < IEEE802154_LONG_ADDRESS_LEN; i++) {
-        reversed_addr[i] = (uint8_t) ((uint8_t *)aExtendedAddress)[IEEE802154_LONG_ADDRESS_LEN - 1 - i];
+        reversed_addr[i] = (uint8_t) ((uint8_t *)aExtAddress)[IEEE802154_LONG_ADDRESS_LEN - 1 - i];
     }
-    if (ENABLE_DEBUG) {
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
         for (unsigned i = 0; i < IEEE802154_LONG_ADDRESS_LEN; ++i) {
             DEBUG("%x ", (uint8_t) ((uint8_t *)reversed_addr)[i]);
         }
@@ -346,7 +344,7 @@ otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aPacket)
     };
 
     /*Set channel and power based on transmit frame */
-    if (ENABLE_DEBUG) {
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
         DEBUG("otPlatRadioTransmit->channel: %i, length %d\n",
               (int) aPacket->mChannel, (int)aPacket->mLength);
         for (size_t i = 0; i < aPacket->mLength; ++i) {
@@ -410,7 +408,7 @@ otError otPlatRadioAddSrcMatchShortEntry(otInstance *aInstance, const uint16_t a
     return OT_ERROR_NONE;
 }
 
-otError otPlatRadioAddSrcMatchExtEntry(otInstance *aInstance, const uint8_t *aExtAddress)
+otError otPlatRadioAddSrcMatchExtEntry(otInstance *aInstance, const otExtAddress *aExtAddress)
 {
     DEBUG("otPlatRadioAddSrcMatchExtEntry\n");
     (void)aInstance;
@@ -426,7 +424,7 @@ otError otPlatRadioClearSrcMatchShortEntry(otInstance *aInstance, const uint16_t
     return OT_ERROR_NONE;
 }
 
-otError otPlatRadioClearSrcMatchExtEntry(otInstance *aInstance, const uint8_t *aExtAddress)
+otError otPlatRadioClearSrcMatchExtEntry(otInstance *aInstance, const otExtAddress *aExtAddress)
 {
     DEBUG("otPlatRadioClearSrcMatchExtEntry\n");
     (void)aInstance;
@@ -457,8 +455,13 @@ otError otPlatRadioEnergyScan(otInstance *aInstance, uint8_t aScanChannel, uint1
 
 void otPlatRadioGetIeeeEui64(otInstance *aInstance, uint8_t *aIeee64Eui64)
 {
-    (void) aInstance;
-    _dev->driver->get(_dev, NETOPT_IPV6_IID, aIeee64Eui64, sizeof(eui64_t));
+    uint8_t addr[IEEE802154_LONG_ADDRESS_LEN];
+
+    (void)aInstance;
+    _dev->driver->get(_dev, NETOPT_ADDRESS_LONG, addr, sizeof(addr));
+    l2util_ipv6_iid_from_addr(NETDEV_TYPE_IEEE802154,
+                              addr, sizeof(eui64_t),
+                              (eui64_t *)aIeee64Eui64);
 }
 
 int8_t otPlatRadioGetReceiveSensitivity(otInstance *aInstance)

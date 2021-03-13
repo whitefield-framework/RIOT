@@ -26,15 +26,16 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+#include "ztimer.h"
+
 #include "net/lora.h"
 
 #include "sx127x.h"
 #include "sx127x_registers.h"
 #include "sx127x_internal.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
-
 
 uint8_t sx127x_get_state(const sx127x_t *dev)
 {
@@ -43,22 +44,22 @@ uint8_t sx127x_get_state(const sx127x_t *dev)
 
 void sx127x_set_state(sx127x_t *dev, uint8_t state)
 {
-#if ENABLE_DEBUG
-    switch (state) {
-    case SX127X_RF_IDLE:
-        DEBUG("[sx127x] Change state: IDLE\n");
-        break;
-    case SX127X_RF_RX_RUNNING:
-        DEBUG("[sx127x] Change state: RX\n");
-        break;
-    case SX127X_RF_TX_RUNNING:
-        DEBUG("[sx127x] Change state: TX\n");
-        break;
-    default:
-        DEBUG("[sx127x] Change state: UNKNOWN\n");
-        break;
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
+        switch (state) {
+        case SX127X_RF_IDLE:
+            DEBUG("[sx127x] Change state: IDLE\n");
+            break;
+        case SX127X_RF_RX_RUNNING:
+            DEBUG("[sx127x] Change state: RX\n");
+            break;
+        case SX127X_RF_TX_RUNNING:
+            DEBUG("[sx127x] Change state: TX\n");
+            break;
+        default:
+            DEBUG("[sx127x] Change state: UNKNOWN\n");
+            break;
+        }
     }
-#endif
 
     dev->settings.state = state;
 }
@@ -160,7 +161,7 @@ uint32_t sx127x_get_time_on_air(const sx127x_t *dev, uint8_t pkt_len)
                     bw = 500e3;
                     break;
                 default:
-                    DEBUG("Invalid bandwith: %d\n", dev->settings.lora.bandwidth);
+                    DEBUG("Invalid bandwidth: %d\n", dev->settings.lora.bandwidth);
                     break;
             }
 
@@ -201,8 +202,8 @@ void sx127x_set_sleep(sx127x_t *dev)
     DEBUG("[sx127x] Set sleep\n");
 
     /* Disable running timers */
-    xtimer_remove(&dev->_internal.tx_timeout_timer);
-    xtimer_remove(&dev->_internal.rx_timeout_timer);
+    ztimer_remove(ZTIMER_MSEC, &dev->_internal.tx_timeout_timer);
+    ztimer_remove(ZTIMER_MSEC, &dev->_internal.rx_timeout_timer);
 
     /* Put chip into sleep */
     sx127x_set_op_mode(dev, SX127X_RF_OPMODE_SLEEP);
@@ -214,8 +215,8 @@ void sx127x_set_standby(sx127x_t *dev)
     DEBUG("[sx127x] Set standby\n");
 
     /* Disable running timers */
-    xtimer_remove(&dev->_internal.tx_timeout_timer);
-    xtimer_remove(&dev->_internal.rx_timeout_timer);
+    ztimer_remove(ZTIMER_MSEC, &dev->_internal.tx_timeout_timer);
+    ztimer_remove(ZTIMER_MSEC, &dev->_internal.rx_timeout_timer);
 
     sx127x_set_op_mode(dev, SX127X_RF_OPMODE_STANDBY);
     sx127x_set_state(dev,  SX127X_RF_IDLE);
@@ -224,6 +225,13 @@ void sx127x_set_standby(sx127x_t *dev)
 void sx127x_set_rx(sx127x_t *dev)
 {
     DEBUG("[sx127x] Set RX\n");
+
+#ifdef SX127X_USE_TX_SWITCH
+    gpio_clear(dev->params.tx_switch_pin);
+#endif
+#ifdef SX127X_USE_RX_SWITCH
+    gpio_set(dev->params.rx_switch_pin);
+#endif
 
     switch (dev->settings.modem) {
         case SX127X_MODEM_FSK:
@@ -276,13 +284,14 @@ void sx127x_set_rx(sx127x_t *dev)
                                  /* SX127X_RF_LORA_IRQFLAGS_FHSSCHANGEDCHANNEL | */
                                  SX127X_RF_LORA_IRQFLAGS_CADDETECTED);
 
-                /* DIO0=RxDone, DIO2=FhssChangeChannel, DIO3=ValidHeader */
+                /* DIO0=RxDone, DIO1=RxTimeout, DIO2=FhssChangeChannel, DIO3=ValidHeader */
                 sx127x_reg_write(dev, SX127X_REG_DIOMAPPING1,
                                  (sx127x_reg_read(dev, SX127X_REG_DIOMAPPING1) &
                                   SX127X_RF_LORA_DIOMAPPING1_DIO0_MASK &
                                   SX127X_RF_LORA_DIOMAPPING1_DIO2_MASK &
                                   SX127X_RF_LORA_DIOMAPPING1_DIO3_MASK) |
                                  SX127X_RF_LORA_DIOMAPPING1_DIO0_00 |
+                                 SX127X_RF_LORA_DIOMAPPING1_DIO1_00 |
                                  SX127X_RF_LORA_DIOMAPPING1_DIO2_00 |
                                  SX127X_RF_LORA_DIOMAPPING1_DIO3_01);
             }
@@ -297,12 +306,13 @@ void sx127x_set_rx(sx127x_t *dev)
                                  SX127X_RF_LORA_IRQFLAGS_FHSSCHANGEDCHANNEL |
                                  SX127X_RF_LORA_IRQFLAGS_CADDETECTED);
 
-                /* DIO0=RxDone, DIO3=ValidHeader */
+                /* DIO0=RxDone, DIO1=RxTimeout, DIO3=ValidHeader */
                 sx127x_reg_write(dev, SX127X_REG_DIOMAPPING1,
                                  (sx127x_reg_read(dev, SX127X_REG_DIOMAPPING1) &
                                   SX127X_RF_LORA_DIOMAPPING1_DIO0_MASK &
                                   SX127X_RF_LORA_DIOMAPPING1_DIO3_MASK) |
                                  SX127X_RF_LORA_DIOMAPPING1_DIO0_00 |
+                                 SX127X_RF_LORA_DIOMAPPING1_DIO1_00 |
                                  SX127X_RF_LORA_DIOMAPPING1_DIO3_01);
             }
 
@@ -314,7 +324,7 @@ void sx127x_set_rx(sx127x_t *dev)
 
     sx127x_set_state(dev, SX127X_RF_RX_RUNNING);
     if (dev->settings.lora.rx_timeout != 0) {
-        xtimer_set(&(dev->_internal.rx_timeout_timer), dev->settings.lora.rx_timeout);
+        ztimer_set(ZTIMER_MSEC, &(dev->_internal.rx_timeout_timer), dev->settings.lora.rx_timeout);
     }
 
 
@@ -328,6 +338,13 @@ void sx127x_set_rx(sx127x_t *dev)
 
 void sx127x_set_tx(sx127x_t *dev)
 {
+#ifdef SX127X_USE_RX_SWITCH
+    gpio_clear(dev->params.rx_switch_pin);
+#endif
+#ifdef SX127X_USE_TX_SWITCH
+    gpio_set(dev->params.tx_switch_pin);
+#endif
+
      switch (dev->settings.modem) {
         case SX127X_MODEM_FSK:
             /* todo */
@@ -340,9 +357,9 @@ void sx127x_set_tx(sx127x_t *dev)
                                  SX127X_RF_LORA_IRQFLAGS_RXDONE |
                                  SX127X_RF_LORA_IRQFLAGS_PAYLOADCRCERROR |
                                  SX127X_RF_LORA_IRQFLAGS_VALIDHEADER |
-                                 /* RFLR_IRQFLAGS_TXDONE | */
+                                 /* SX127X_RF_LORA_IRQFLAGS_TXDONE | */
                                  SX127X_RF_LORA_IRQFLAGS_CADDONE |
-                                 /* RFLR_IRQFLAGS_FHSSCHANGEDCHANNEL | */
+                                 /* SX127X_RF_LORA_IRQFLAGS_FHSSCHANGEDCHANNEL | */
                                  SX127X_RF_LORA_IRQFLAGS_CADDETECTED);
 
                 /* DIO0=TxDone, DIO2=FhssChangeChannel */
@@ -380,7 +397,7 @@ void sx127x_set_tx(sx127x_t *dev)
 
     /* Start TX timeout timer */
     if (dev->settings.lora.tx_timeout != 0) {
-        xtimer_set(&(dev->_internal.tx_timeout_timer), dev->settings.lora.tx_timeout);
+        ztimer_set(ZTIMER_MSEC, &(dev->_internal.tx_timeout_timer), dev->settings.lora.tx_timeout);
     }
 
     /* Put chip into transfer mode */
@@ -423,28 +440,28 @@ uint8_t sx127x_get_op_mode(const sx127x_t *dev)
 
 void sx127x_set_op_mode(const sx127x_t *dev, uint8_t op_mode)
 {
-#if ENABLE_DEBUG
-    switch(op_mode) {
-    case SX127X_RF_OPMODE_SLEEP:
-        DEBUG("[sx127x] Set op mode: SLEEP\n");
-        break;
-    case SX127X_RF_OPMODE_STANDBY:
-        DEBUG("[sx127x] Set op mode: STANDBY\n");
-        break;
-    case SX127X_RF_OPMODE_RECEIVER_SINGLE:
-        DEBUG("[sx127x] Set op mode: RECEIVER SINGLE\n");
-        break;
-    case SX127X_RF_OPMODE_RECEIVER:
-        DEBUG("[sx127x] Set op mode: RECEIVER\n");
-        break;
-    case SX127X_RF_OPMODE_TRANSMITTER:
-        DEBUG("[sx127x] Set op mode: TRANSMITTER\n");
-        break;
-    default:
-        DEBUG("[sx127x] Set op mode: UNKNOWN (%d)\n", op_mode);
-        break;
+    if (IS_ACTIVE(ENABLE_DEBUG)) {
+        switch(op_mode) {
+        case SX127X_RF_OPMODE_SLEEP:
+            DEBUG("[sx127x] Set op mode: SLEEP\n");
+            break;
+        case SX127X_RF_OPMODE_STANDBY:
+            DEBUG("[sx127x] Set op mode: STANDBY\n");
+            break;
+        case SX127X_RF_OPMODE_RECEIVER_SINGLE:
+            DEBUG("[sx127x] Set op mode: RECEIVER SINGLE\n");
+            break;
+        case SX127X_RF_OPMODE_RECEIVER:
+            DEBUG("[sx127x] Set op mode: RECEIVER\n");
+            break;
+        case SX127X_RF_OPMODE_TRANSMITTER:
+            DEBUG("[sx127x] Set op mode: TRANSMITTER\n");
+            break;
+        default:
+            DEBUG("[sx127x] Set op mode: UNKNOWN (%d)\n", op_mode);
+            break;
+        }
     }
-#endif
 
     /* Replace previous mode value and setup new mode value */
     sx127x_reg_write(dev, SX127X_REG_OPMODE,

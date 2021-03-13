@@ -21,17 +21,17 @@
 #include <errno.h>
 #include <string.h>
 
-#include "luid.h"
 #include "mutex.h"
 #include "xtimer.h"
 #include "assert.h"
 #include "net/ethernet.h"
+#include "net/eui_provider.h"
 #include "net/netdev/eth.h"
 
 #include "enc28j60.h"
 #include "enc28j60_regs.h"
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG    0
 #include "debug.h"
 
 #define SPI_BUS         (dev->p.spi)
@@ -58,7 +58,7 @@
 #define SPI_CLK                     SPI_CLK_10MHZ
 
 /**
- * @brief   The devices build-in buffer size
+ * @brief   The devices built-in buffer size
  *
  * This is a shared buffer that is freely configurable to be used for TX and RX
  */
@@ -82,7 +82,7 @@
  * @brief  Maximum transmission time
  *
  * The time in us that is required to send an Ethernet frame of maximum length
- * (Preamle + SFD + 1518 byte) at 10 Mbps in full duplex mode with a guard
+ * (Preamble + SFD + 1518 byte) at 10 Mbps in full duplex mode with a guard
  * period of 9,6 us. This time is used as time out for send operations.
  */
 #define MAX_TX_TIME                 (1230U)
@@ -217,12 +217,14 @@ static void cmd_rbm(enc28j60_t *dev, uint8_t *data, size_t len)
 
 static void cmd_wbm(enc28j60_t *dev, uint8_t *data, size_t len)
 {
-    /* start transaction */
-    spi_acquire(SPI_BUS, CS_PIN, SPI_MODE_0, SPI_CLK);
-    /* transfer data */
-    spi_transfer_regs(SPI_BUS, CS_PIN, CMD_WBM, data, NULL, len);
-    /* finish SPI transaction */
-    spi_release(SPI_BUS);
+    if (len) {
+        /* start transaction */
+        spi_acquire(SPI_BUS, CS_PIN, SPI_MODE_0, SPI_CLK);
+        /* transfer data */
+        spi_transfer_regs(SPI_BUS, CS_PIN, CMD_WBM, data, NULL, len);
+        /* finish SPI transaction */
+        spi_release(SPI_BUS);
+    }
 }
 
 static void mac_get(enc28j60_t *dev, uint8_t *mac)
@@ -247,11 +249,10 @@ static void mac_set(enc28j60_t *dev, uint8_t *mac)
 
 static void on_int(void *arg)
 {
-    /* disable gobal interupt enable bit to avoid loosing interupts */
+    /* disable global interrupt enable bit to avoid losing interrupts */
     cmd_bfc((enc28j60_t *)arg, REG_EIE, -1, EIE_INTIE);
 
-    netdev_t *netdev = (netdev_t *)arg;
-    netdev->event_callback(arg, NETDEV_EVENT_ISR);
+    netdev_trigger_event_isr(arg);
 }
 
 static int nd_send(netdev_t *netdev, const iolist_t *iolist)
@@ -307,7 +308,7 @@ static int nd_send(netdev_t *netdev, const iolist_t *iolist)
  * Section 14 of errata sheet: Even values in ERXRDPT may corrupt receive
  * buffer as well as the next packet pointer. ERXRDPT need to be set always
  * at odd addresses. Following macros determine odd ERXRDPT from next packet
- * pointer and vise versa. Next packet pointer is always at even address
+ * pointer and vice versa. Next packet pointer is always at even address
  * because of hardware padding.
  */
 #define NEXT_TO_ERXRDPT(n) ((n == BUF_RX_START || n - 1 > BUF_RX_END) ? BUF_RX_END : n - 1)
@@ -328,7 +329,7 @@ static int nd_recv(netdev_t *netdev, void *buf, size_t max_len, void *info)
     cmd_w_addr(dev, ADDR_READ_PTR, ERXRDPT_TO_NEXT(rx_rd_ptr));
     /* read packet header */
     cmd_rbm(dev, head, 6);
-    /* TODO: care for endianess */
+    /* TODO: care for endianness */
     next = (uint16_t)((head[1] << 8) | head[0]);
     size = (uint16_t)((head[3] << 8) | head[2]) - 4;  /* discard CRC */
 
@@ -422,12 +423,11 @@ static int nd_init(netdev_t *netdev)
     cmd_wcr(dev, REG_B2_MABBIPG, 2, MABBIPG_FD);
     /* set non-back-to-back inter packet gap -> 0x12 is default */
     cmd_wcr(dev, REG_B2_MAIPGL, 2, MAIPGL_FD);
+
     /* set default MAC address */
-    uint8_t macbuf[ETHERNET_ADDR_LEN];
-    luid_get(macbuf, ETHERNET_ADDR_LEN);
-    macbuf[0] |= 0x02;      /* locally administered address */
-    macbuf[0] &= ~0x01;     /* unicast address */
-    mac_set(dev, macbuf);
+    eui48_t addr;
+    netdev_eui48_get(netdev, &addr);
+    mac_set(dev, addr.uint8);
 
     /* PHY configuration */
     cmd_w_phy(dev, REG_PHY_PHCON1, PHCON1_PDPXMD);
@@ -490,7 +490,7 @@ static void nd_isr(netdev_t *netdev)
         }
         eir = cmd_rcr(dev, REG_EIR, -1);
     }
-    /* enable gobal interupt enable bit again */
+    /* enable global interrupt enable bit again */
     cmd_bfs(dev, REG_EIE, -1, EIE_INTIE);
 }
 
@@ -503,7 +503,7 @@ static int nd_get(netdev_t *netdev, netopt_t opt, void *value, size_t max_len)
             assert(max_len >= ETHERNET_ADDR_LEN);
             mac_get(dev, (uint8_t *)value);
             return ETHERNET_ADDR_LEN;
-        case NETOPT_LINK_CONNECTED:
+        case NETOPT_LINK:
             if (cmd_r_phy(dev, REG_PHY_PHSTAT2) & PHSTAT2_LSTAT) {
                 *((netopt_enable_t *)value) = NETOPT_ENABLE;
             }
@@ -539,10 +539,12 @@ static const netdev_driver_t netdev_driver_enc28j60 = {
     .set = nd_set,
 };
 
-void enc28j60_setup(enc28j60_t *dev, const enc28j60_params_t *params)
+void enc28j60_setup(enc28j60_t *dev, const enc28j60_params_t *params, uint8_t index)
 {
     dev->netdev.driver = &netdev_driver_enc28j60;
     dev->p = *params;
     mutex_init(&dev->lock);
     dev->tx_time = 0;
+
+    netdev_register(&dev->netdev, NETDEV_ENC28J60, index);
 }

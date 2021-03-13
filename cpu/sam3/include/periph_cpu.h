@@ -66,9 +66,19 @@ typedef uint32_t gpio_t;
 #define TIMER_MAX_VAL       (0xffffffff)
 
 /**
- * @brief   We use 3 channels for each defined timer
+ * @brief   We use one channel for each defined timer
+ *
+ * While the peripheral provides three channels, the current interrupt
+ * flag handling leads to a race condition where calling timer_clear() on one
+ * channel can disable a pending flag for other channels.
+ * Until resolved, limit the peripheral to only one channel.
  */
-#define TIMER_CHANNELS      (3)
+#define TIMER_CHANNEL_NUMOF (1)
+
+/**
+ * @brief   The RTT width is fixed to 32-bit
+ */
+#define RTT_MAX_VALUE       (0xffffffff)
 
 /**
  * @brief   Generate GPIO mode bitfields
@@ -149,6 +159,7 @@ typedef enum {
     GPIO_MUX_B = 1,         /**< alternate function B */
 } gpio_mux_t;
 
+#ifndef DOXYGEN
 /**
  * @brief   Override default SPI modes
  * @{
@@ -175,7 +186,9 @@ typedef enum {
     SPI_CLK_10MHZ  = (10000000)                     /**< 10MHz */
 } spi_clk_t;
 /** @} */
+#endif /* ndef DOXYGEN */
 
+#ifndef DOXYGEN
 /**
  * @brief   Override ADC resolution values
  * @{
@@ -190,6 +203,7 @@ typedef enum {
     ADC_RES_16BIT = 0x8                     /**< not applicable */
 } adc_res_t;
 /** @} */
+#endif /* ndef DOXYGEN */
 
 /**
  * @brief   Timer configuration data

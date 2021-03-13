@@ -20,9 +20,12 @@
  */
 
 #include <stdint.h>
+#include <assert.h>
 
 #include "log.h"
 #include "random.h"
+#include "bitarithm.h"
+
 #ifdef MODULE_PUF_SRAM
 #include "puf_sram.h"
 #endif
@@ -33,7 +36,7 @@
 #include "luid.h"
 #endif
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 void auto_init_random(void)

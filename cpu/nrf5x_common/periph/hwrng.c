@@ -24,10 +24,12 @@
 
 #include "cpu.h"
 #include "periph/hwrng.h"
+#include "assert.h"
 
 void hwrng_init(void)
 {
-    /* nothing to do here */
+    /* enable bias correction */
+    NRF_RNG->CONFIG = 1;
 }
 
 void hwrng_read(void *buf, unsigned int num)

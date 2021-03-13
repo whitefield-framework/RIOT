@@ -16,10 +16,10 @@
  * @}
  */
 
-#include "assert.h"
-#include "openthread/types.h"
+#include "openthread/error.h"
+#include "openthread/instance.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 void otPlatSettingsInit(otInstance *aInstance)

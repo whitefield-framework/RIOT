@@ -27,14 +27,14 @@
 #endif
 #include "mutex.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 #include "universal_address.h"
 
 /**
  * @brief Maximum number of entries handled
  */
-/* determine the maximum numer of entries */
+/* determine the maximum number of entries */
 #ifndef UNIVERSAL_ADDRESS_MAX_ENTRIES
 /* all potential users of universal addresses have to add their requirements here */
 #   if defined(MODULE_FIB) && defined(MODULE_GNRC_IPV6)

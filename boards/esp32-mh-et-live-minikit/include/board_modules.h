@@ -34,7 +34,7 @@ extern "C" {
 /**
  * @name    MRF24J40 shield configuration
  *
- * Configuration for the MRF24J40 shield when module ```mrf24j40``` is used.
+ * Configuration for the MRF24J40 shield when module `mrf24j40` is used.
  *
  * MRF24J40 module uses SPI_DEV(0) and according pins on this board to be
  * compatible with the Wemos D1 mini MRF24J40 shield.
@@ -46,16 +46,16 @@ extern "C" {
 #define MRF24J40_PARAM_SPI      SPI_DEV(0)      /**< SPI_DEV(0) is used (fixed) */
 
 #ifndef MRF24J40_PARAM_SPI_CLK
-#define MRF24J40_PARAM_SPI_CLK  SPI_CLK_1MHZ    /**< SPI bus speed used (can be overriden) */
+#define MRF24J40_PARAM_SPI_CLK  SPI_CLK_1MHZ    /**< SPI bus speed used (can be overridden) */
 #endif
 #ifndef MRF24J40_PARAM_CS
-#define MRF24J40_PARAM_CS       GPIO26           /**< MRF24J40 CS signal (can be overriden) */
+#define MRF24J40_PARAM_CS       GPIO26           /**< MRF24J40 CS signal (can be overridden) */
 #endif
 #ifndef MRF24J40_PARAM_INT
-#define MRF24J40_PARAM_INT      GPIO17           /**< MRF24J40 INT signal (can be overriden) */
+#define MRF24J40_PARAM_INT      GPIO17           /**< MRF24J40 INT signal (can be overridden) */
 #endif
 #ifndef MRF24J40_PARAM_RESET
-#define MRF24J40_PARAM_RESET    GPIO16          /**< MRF24J40 RESET signal (can be overriden) */
+#define MRF24J40_PARAM_RESET    GPIO16          /**< MRF24J40 RESET signal (can be overridden) */
 #endif
 /** @} */
 #endif /* MODULE_MRF24J40 || DOXYGEN */
@@ -64,7 +64,7 @@ extern "C" {
 /**
  * @name    SD-Card shield configuration
  *
- * Configuration of the SD-Card interface when module ```sdcard_spi``` is used.
+ * Configuration of the SD-Card interface when module `sdcard_spi` is used.
  *
  * SD card interface uses SPI_DEV(0) on this board to be compatible with the
  * Wemos D1 mini micro SD card shield. The D8 pin (GPIO5) is used as default

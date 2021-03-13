@@ -21,6 +21,7 @@
 
 #include <signal.h>
 #include <stdio.h>
+#include <poll.h>
 /* enable signal handler register access on different platforms
  * check here for more:
  * http://sourceforge.net/p/predef/wiki/OperatingSystems/
@@ -48,8 +49,6 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
-
-#include "kernel_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -117,6 +116,7 @@ extern int (*real_pause)(void);
 extern int (*real_pipe)(int[2]);
 /* The ... is a hack to save includes: */
 extern int (*real_select)(int nfds, ...);
+extern int (*real_poll)(struct pollfd *nfds, ...);
 extern int (*real_setitimer)(int which, const struct itimerval
         *__restrict value, struct itimerval *__restrict ovalue);
 extern int (*real_setsid)(void);
@@ -180,8 +180,6 @@ int register_interrupt(int sig, _native_callback_t handler);
  * unregister interrupt handler for interrupt sig
  */
 int unregister_interrupt(int sig);
-
-//#include <sys/param.h>
 
 #ifdef __cplusplus
 }

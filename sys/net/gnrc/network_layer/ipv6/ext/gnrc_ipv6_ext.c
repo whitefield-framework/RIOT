@@ -15,6 +15,7 @@
  * @author Martine Lenders <m.lenders@fu-berlin.de>
  */
 
+#include <assert.h>
 #include <errno.h>
 
 #include "utlist.h"
@@ -23,11 +24,18 @@
 #include "net/gnrc/pktbuf.h"
 #include "net/gnrc/icmpv6/error.h"
 #include "net/gnrc/ipv6.h"
+#include "net/gnrc/ipv6/ext/frag.h"
+#include "net/gnrc/ipv6/ext/opt.h"
 #include "net/gnrc/ipv6/ext/rh.h"
+#if defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) && \
+    defined(MODULE_GNRC_IPV6_EXT_FRAG)
+#include "net/udp.h"
+#endif  /* defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) &&
+         * defined(MODULE_GNRC_IPV6_EXT_FRAG) */
 
 #include "net/gnrc/ipv6/ext.h"
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 /**
@@ -100,7 +108,22 @@ gnrc_pktsnip_t *gnrc_ipv6_ext_process_all(gnrc_pktsnip_t *pkt,
                                           uint8_t *protnum)
 {
     bool is_ext = true;
+#if defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) && \
+    defined(MODULE_GNRC_IPV6_EXT_FRAG)
+    bool is_frag = false;
+#endif  /* defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) &&
+         * defined(MODULE_GNRC_IPV6_EXT_FRAG) */
+
     while (is_ext) {
+#if defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) && \
+    defined(MODULE_GNRC_IPV6_EXT_FRAG)
+        if (*protnum == PROTNUM_IPV6_EXT_FRAG) {
+            /* just assigning the if expression might override it if
+             * fragment header is not the last extension header ;-) */
+            is_frag = true;
+        }
+#endif  /* defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) &&
+         * defined(MODULE_GNRC_IPV6_EXT_FRAG) */
         switch (*protnum) {
             case PROTNUM_IPV6_EXT_DST:
             case PROTNUM_IPV6_EXT_RH:
@@ -109,21 +132,51 @@ gnrc_pktsnip_t *gnrc_ipv6_ext_process_all(gnrc_pktsnip_t *pkt,
             case PROTNUM_IPV6_EXT_ESP:
             case PROTNUM_IPV6_EXT_MOB: {
                 ipv6_ext_t *ext_hdr;
+                uint8_t nh;
 
                 DEBUG("ipv6: handle extension header (protnum = %u)\n",
                       *protnum);
                 ext_hdr = pkt->data;
+                nh = ext_hdr->nh;
                 if ((pkt = _demux(pkt, *protnum)) == NULL) {
                     DEBUG("ipv6: packet was consumed by extension header "
                           "handling\n");
                     return NULL;
                 }
-                *protnum = ext_hdr->nh;
-                if (_duplicate_hopopt(pkt, *protnum)) {
+                *protnum = nh;
+                if (_duplicate_hopopt(pkt, nh)) {
                     return NULL;
                 }
                 break;
             }
+#if defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) && \
+    defined(MODULE_GNRC_IPV6_EXT_FRAG)
+            case PROTNUM_UDP:
+                if (is_frag) {
+                    DEBUG("gnrc_ipv6_ext: adapting compressed header length\n");
+                    /* we can only really now determine the length of the UDP
+                     * packet, after the IPv6 datagram is fully reassembled */
+                    udp_hdr_t *udp_hdr = pkt->data;
+
+                    udp_hdr->length = byteorder_htons((uint16_t)pkt->size);
+                }
+                is_ext = false;
+                break;
+            case PROTNUM_IPV6:
+                if (is_frag) {
+                    DEBUG("gnrc_ipv6_ext: adapting compressed header length\n");
+                    /* we can only really now determine the length of the
+                     * encapsulated IPv6 header, after the IPv6 datagram is
+                     * fully reassembled */
+                    ipv6_hdr_t *ipv6_hdr = pkt->data;
+
+                    ipv6_hdr->len = byteorder_htons((uint16_t)pkt->size -
+                                                    sizeof(ipv6_hdr_t));
+                }
+                is_ext = false;
+                break;
+#endif  /* defined(MODULE_GNRC_SIXLOWPAN_IPHC_NHC) &&
+         * defined(MODULE_GNRC_IPV6_EXT_FRAG) */
             default:
                 is_ext = false;
                 break;
@@ -254,10 +307,16 @@ static gnrc_pktsnip_t *_demux(gnrc_pktsnip_t *pkt, unsigned protnum)
 
             break;
 #endif  /* MODULE_GNRC_IPV6_EXT_RH */
-
+        case PROTNUM_IPV6_EXT_FRAG:
+#ifdef MODULE_GNRC_IPV6_EXT_FRAG
+            return gnrc_ipv6_ext_frag_reass(pkt);
+#endif  /* MODULE_GNRC_IPV6_EXT_FRAG */
         case PROTNUM_IPV6_EXT_HOPOPT:
         case PROTNUM_IPV6_EXT_DST:
-        case PROTNUM_IPV6_EXT_FRAG:
+            if (IS_USED(MODULE_GNRC_IPV6_EXT_OPT)) {
+                return gnrc_ipv6_ext_opt_process(pkt, protnum);
+            }
+            /* Intentionally falls through */
         case PROTNUM_IPV6_EXT_AH:
         case PROTNUM_IPV6_EXT_ESP:
         case PROTNUM_IPV6_EXT_MOB:
@@ -286,14 +345,14 @@ gnrc_pktsnip_t *gnrc_ipv6_ext_build(gnrc_pktsnip_t *ipv6, gnrc_pktsnip_t *next,
     }
 
     if (ipv6 != NULL) {
-        LL_SEARCH_SCALAR(ipv6, prev, next, next);
+        prev = gnrc_pkt_prev_snip(ipv6, next);
 
         if (prev == NULL) {
             return NULL;
         }
     }
 
-    snip = gnrc_pktbuf_add(next, NULL, size, GNRC_NETTYPE_IPV6);
+    snip = gnrc_pktbuf_add(next, NULL, size, GNRC_NETTYPE_IPV6_EXT);
 
     if (snip == NULL) {
         return NULL;

@@ -14,11 +14,13 @@
  * @author  Cenk Gündoğan <cenk.guendogan@haw-hamburg.de>
  */
 
+#include <assert.h>
+
 #include "inttypes.h"
 #include "random.h"
 #include "trickle.h"
 
-#define ENABLE_DEBUG        (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 void trickle_callback(trickle_t *trickle)
@@ -70,8 +72,6 @@ void trickle_start(kernel_pid_t pid, trickle_t *trickle, uint16_t msg_type,
 {
     assert(Imin > 0);
     assert((Imin << Imax) < (UINT32_MAX / 2));
-
-    trickle->pid = pid;
 
     trickle->c = 0;
     trickle->k = k;

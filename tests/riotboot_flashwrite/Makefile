@@ -2,12 +2,6 @@ DEVELHELP ?= 0
 BOARD ?= samr21-xpro
 include ../Makefile.tests_common
 
-BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-mega2560 arduino-uno \
-                             chronos msb-430 msb-430h nucleo-f031k6 \
-                             nucleo-f042k6 nucleo-l031k6 nucleo-f030r8 \
-                             nucleo-f303k8 nucleo-l053r8 stm32f0discovery \
-                             telosb waspmote-pro wsn430-v1_3b wsn430-v1_4 z1
-
 # Include packages that pull up and auto-init the link layer.
 # NOTE: 6LoWPAN will be included if IEEE802.15.4 devices are present
 USEMODULE += gnrc_netdev_default
@@ -15,8 +9,7 @@ USEMODULE += auto_init_gnrc_netif
 # Specify the mandatory networking modules for IPv6 and UDP
 USEMODULE += gnrc_ipv6_default
 USEMODULE += gnrc_ipv6_router_default
-USEMODULE += gnrc_udp
-USEMODULE += gnrc_sock_udp
+USEMODULE += sock_udp
 # Additional networking modules that can be dropped if not needed
 USEMODULE += gnrc_icmpv6_echo
 
@@ -34,20 +27,16 @@ USEMODULE += shell_commands
 # boards
 LOW_MEMORY_BOARDS := nucleo-f334r8
 
-GNRC_NETIF_NUMOF := 2
-
 # uncomment these to use ethos
-#USEMODULE += ethos gnrc_uhcpc
+#USEMODULE += stdio_ethos gnrc_uhcpc
 #
 ## ethos baudrate can be configured from make command
 #ETHOS_BAUDRATE ?= 115200
-#CFLAGS += -DETHOS_BAUDRATE=$(ETHOS_BAUDRATE) -DUSE_ETHOS_FOR_STDIO
+#CFLAGS += -DETHOS_BAUDRATE=$(ETHOS_BAUDRATE)
 
 ifneq (,$(filter $(BOARD),$(LOW_MEMORY_BOARDS)))
   $(info Using low-memory configuration for microcoap_server.)
   ## low-memory tuning values
-  # lower pktbuf buffer size
-  CFLAGS += -DGNRC_PKTBUF_SIZE=1000
   USEMODULE += prng_minstd
 endif
 
@@ -60,16 +49,13 @@ QUIET ?= 1
 
 include $(RIOTBASE)/Makefile.include
 
-# Set a custom channel if needed
-ifneq (,$(filter cc110x,$(USEMODULE)))          # radio is cc110x sub-GHz
-  DEFAULT_CHANNEL ?= 0
-  CFLAGS += -DCC110X_DEFAULT_CHANNEL=$(DEFAULT_CHANNEL)
-else
-  ifneq (,$(filter at86rf212b,$(USEMODULE)))    # radio is IEEE 802.15.4 sub-GHz
-    DEFAULT_CHANNEL ?= 5
-    CFLAGS += -DIEEE802154_DEFAULT_SUBGHZ_CHANNEL=$(DEFAULT_CHANNEL)
-  else                                          # radio is IEEE 802.15.4 2.4 GHz
-    DEFAULT_CHANNEL ?= 26
-    CFLAGS += -DIEEE802154_DEFAULT_CHANNEL=$(DEFAULT_CHANNEL)
+ifneq (,$(filter $(BOARD),$(LOW_MEMORY_BOARDS)))
+  # lower pktbuf buffer size
+  # Set GNRC_PKTBUF_SIZE via CFLAGS if not being set via Kconfig.
+  ifndef CONFIG_GNRC_PKTBUF_SIZE
+    CFLAGS += -DCONFIG_GNRC_PKTBUF_SIZE=1000
   endif
 endif
+
+# Set a custom channel if needed
+include $(RIOTMAKE)/default-radio-settings.inc.mk

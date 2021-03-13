@@ -15,7 +15,9 @@
  * @author  Cenk Gündoğan <cenk.guendogan@haw-hamburg.de>
  */
 
+#include <assert.h>
 #include <string.h>
+#include "kernel_defines.h"
 
 #include "net/icmpv6.h"
 #include "net/ipv6.h"
@@ -32,7 +34,7 @@
 #include "net/gnrc/rpl/p2p_dodag.h"
 #endif
 
-#define ENABLE_DEBUG    (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 static char _stack[GNRC_RPL_STACK_SIZE];
@@ -68,16 +70,23 @@ kernel_pid_t gnrc_rpl_init(kernel_pid_t if_pid)
 {
     /* check if RPL was initialized before */
     if (gnrc_rpl_pid == KERNEL_PID_UNDEF) {
+        mutex_t eventloop_startup = MUTEX_INIT_LOCKED;
+
         _instance_id = 0;
         /* start the event loop */
         gnrc_rpl_pid = thread_create(_stack, sizeof(_stack), GNRC_RPL_PRIO,
                                      THREAD_CREATE_STACKTEST,
-                                     _event_loop, NULL, "RPL");
+                                     _event_loop, (void*)&eventloop_startup,
+                                     "RPL");
 
         if (gnrc_rpl_pid == KERNEL_PID_UNDEF) {
             DEBUG("RPL: could not start the event loop\n");
             return KERNEL_PID_UNDEF;
         }
+
+        /* Wait for the event loop to indicate that it set up its message
+         * queue, and registration with netreg can commence. */
+        mutex_lock(&eventloop_startup);
 
         _me_reg.demux_ctx = ICMPV6_RPL_CTRL;
         _me_reg.target.pid = gnrc_rpl_pid;
@@ -122,19 +131,20 @@ gnrc_rpl_instance_t *gnrc_rpl_root_init(uint8_t instance_id, ipv6_addr_t *dodag_
 
     dodag->dtsn = 1;
     dodag->prf = 0;
-    dodag->dio_interval_doubl = GNRC_RPL_DEFAULT_DIO_INTERVAL_DOUBLINGS;
-    dodag->dio_min = GNRC_RPL_DEFAULT_DIO_INTERVAL_MIN;
-    dodag->dio_redun = GNRC_RPL_DEFAULT_DIO_REDUNDANCY_CONSTANT;
-    dodag->default_lifetime = GNRC_RPL_DEFAULT_LIFETIME;
-    dodag->lifetime_unit = GNRC_RPL_LIFETIME_UNIT;
+    dodag->dio_interval_doubl = CONFIG_GNRC_RPL_DEFAULT_DIO_INTERVAL_DOUBLINGS;
+    dodag->dio_min = CONFIG_GNRC_RPL_DEFAULT_DIO_INTERVAL_MIN;
+    dodag->dio_redun = CONFIG_GNRC_RPL_DEFAULT_DIO_REDUNDANCY_CONSTANT;
+    dodag->default_lifetime = CONFIG_GNRC_RPL_DEFAULT_LIFETIME;
+    dodag->lifetime_unit = CONFIG_GNRC_RPL_LIFETIME_UNIT;
     dodag->version = GNRC_RPL_COUNTER_INIT;
     dodag->grounded = GNRC_RPL_GROUNDED;
     dodag->node_status = GNRC_RPL_ROOT_NODE;
     dodag->my_rank = GNRC_RPL_ROOT_RANK;
     dodag->dio_opts |= GNRC_RPL_REQ_DIO_OPT_DODAG_CONF;
-#ifndef GNRC_RPL_WITHOUT_PIO
-    dodag->dio_opts |= GNRC_RPL_REQ_DIO_OPT_PREFIX_INFO;
-#endif
+
+    if (!IS_ACTIVE(CONFIG_GNRC_RPL_WITHOUT_PIO)) {
+        dodag->dio_opts |= GNRC_RPL_REQ_DIO_OPT_PREFIX_INFO;
+    }
 
     trickle_start(gnrc_rpl_pid, &dodag->trickle, GNRC_RPL_MSG_TYPE_TRICKLE_MSG,
                   (1 << dodag->dio_min), dodag->dio_interval_doubl,
@@ -244,8 +254,15 @@ static void *_event_loop(void *args)
 {
     msg_t msg, reply;
 
-    (void)args;
-    msg_init_queue(_msg_q, GNRC_RPL_MSG_QUEUE_SIZE);
+    {
+        mutex_t *eventloop_startup = (mutex_t*)args;
+
+        msg_init_queue(_msg_q, GNRC_RPL_MSG_QUEUE_SIZE);
+
+        /* Message queue is initialized, gnrc_rpl_init can continue and will
+         * pop the underlying mutex off its stack. */
+        mutex_unlock(eventloop_startup);
+    }
 
     /* preinitialize ACK */
     reply.type = GNRC_NETAPI_MSG_TYPE_ACK;
@@ -323,8 +340,8 @@ void gnrc_rpl_delay_dao(gnrc_rpl_dodag_t *dodag)
 {
     evtimer_del(&gnrc_rpl_evtimer, (evtimer_event_t *)&dodag->dao_event);
     ((evtimer_event_t *)&(dodag->dao_event))->offset = random_uint32_range(
-        GNRC_RPL_DAO_DELAY_DEFAULT,
-        GNRC_RPL_DAO_DELAY_DEFAULT + GNRC_RPL_DAO_DELAY_JITTER
+        CONFIG_GNRC_RPL_DAO_DELAY_DEFAULT,
+        CONFIG_GNRC_RPL_DAO_DELAY_DEFAULT + CONFIG_GNRC_RPL_DAO_DELAY_JITTER
     );
     evtimer_add_msg(&gnrc_rpl_evtimer, &dodag->dao_event, gnrc_rpl_pid);
     dodag->dao_counter = 0;
@@ -335,8 +352,8 @@ void gnrc_rpl_long_delay_dao(gnrc_rpl_dodag_t *dodag)
 {
     evtimer_del(&gnrc_rpl_evtimer, (evtimer_event_t *)&dodag->dao_event);
     ((evtimer_event_t *)&(dodag->dao_event))->offset = random_uint32_range(
-        GNRC_RPL_DAO_DELAY_LONG,
-        GNRC_RPL_DAO_DELAY_LONG + GNRC_RPL_DAO_DELAY_JITTER
+        CONFIG_GNRC_RPL_DAO_DELAY_LONG,
+        CONFIG_GNRC_RPL_DAO_DELAY_LONG + CONFIG_GNRC_RPL_DAO_DELAY_JITTER
     );
     evtimer_add_msg(&gnrc_rpl_evtimer, &dodag->dao_event, gnrc_rpl_pid);
     dodag->dao_counter = 0;
@@ -353,11 +370,12 @@ void _dao_handle_send(gnrc_rpl_dodag_t *dodag)
         return;
     }
 #endif
-    if ((dodag->dao_ack_received == false) && (dodag->dao_counter < GNRC_RPL_DAO_SEND_RETRIES)) {
+    if ((dodag->dao_ack_received == false) &&
+        (dodag->dao_counter < CONFIG_GNRC_RPL_DAO_SEND_RETRIES)) {
         dodag->dao_counter++;
         gnrc_rpl_send_DAO(dodag->instance, NULL, dodag->default_lifetime);
         evtimer_del(&gnrc_rpl_evtimer, (evtimer_event_t *)&dodag->dao_event);
-        ((evtimer_event_t *)&(dodag->dao_event))->offset = GNRC_RPL_DAO_ACK_DELAY;
+        ((evtimer_event_t *)&(dodag->dao_event))->offset = CONFIG_GNRC_RPL_DAO_ACK_DELAY;
         evtimer_add_msg(&gnrc_rpl_evtimer, &dodag->dao_event, gnrc_rpl_pid);
     }
     else if (dodag->dao_ack_received == false) {
@@ -368,7 +386,7 @@ void _dao_handle_send(gnrc_rpl_dodag_t *dodag)
 uint8_t gnrc_rpl_gen_instance_id(bool local)
 {
     mutex_lock(&_inst_id_mutex);
-    uint8_t instance_id = GNRC_RPL_DEFAULT_INSTANCE;
+    uint8_t instance_id = CONFIG_GNRC_RPL_DEFAULT_INSTANCE;
 
     if (local) {
         instance_id = ((_instance_id++) | GNRC_RPL_INSTANCE_ID_MSB);

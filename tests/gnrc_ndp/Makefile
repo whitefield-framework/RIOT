@@ -1,22 +1,21 @@
 include ../Makefile.tests_common
 
-BOARD_INSUFFICIENT_MEMORY := arduino-duemilanove arduino-mega2560 arduino-nano \
-                             arduino-uno chronos nucleo-f030r8 nucleo-f031k6 \
-                             nucleo-f042k6 nucleo-l031k6 nucleo-l053r8 \
-                             stm32f0discovery telosb waspmote-pro wsn430-v1_3b \
-                             wsn430-v1_4
-
 USEMODULE += gnrc_ipv6_nib_router
 USEMODULE += gnrc_ndp
 USEMODULE += gnrc_netif
+USEMODULE += gnrc_nettype_ipv6
 USEMODULE += embunit
 USEMODULE += netdev_ieee802154
 USEMODULE += netdev_test
 
 CFLAGS += -DGNRC_NETTYPE_NDP=GNRC_NETTYPE_TEST
-CFLAGS += -DGNRC_PKTBUF_SIZE=512
 CFLAGS += -DTEST_SUITES
 
-TEST_ON_CI_WHITELIST += all
+INCLUDES += -I$(RIOTBASE)/sys/net/gnrc/pktbuf_static/include
 
 include $(RIOTBASE)/Makefile.include
+
+# Set GNRC_PKTBUF_SIZE via CFLAGS if not being set via Kconfig.
+ifndef CONFIG_GNRC_PKTBUF_SIZE
+  CFLAGS += -DCONFIG_GNRC_PKTBUF_SIZE=512
+endif

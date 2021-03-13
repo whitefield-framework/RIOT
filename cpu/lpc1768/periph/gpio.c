@@ -18,6 +18,8 @@
  * @}
  */
 
+#include <assert.h>
+
 #include "cpu.h"
 #include "periph/gpio.h"
 
@@ -231,7 +233,7 @@ void isr_eint3(void)
 
     /* invoke all handlers */
     for (int i = 0; i < NUMOF_IRQS; i++) {
-        if (status & (1 << i)) {
+        if (status & ((uint32_t)1 << i)) {
             isr_ctx[i].cb(isr_ctx[i].arg);
 
             LPC_GPIOINT->IO0IntClr |= (1 << i);

@@ -50,8 +50,15 @@ extern "C" {
  * @{
  */
 #define XTIMER_WIDTH        (16U)
-#define XTIMER_OVERHEAD     (6U)
-#define XTIMER_SHOOT_EARLY  (3U)
+/** @} */
+
+/**
+ * @name    ztimer configuration
+ * @{
+ */
+#define CONFIG_ZTIMER_USEC_TYPE    ZTIMER_TYPE_PERIPH_TIMER
+#define CONFIG_ZTIMER_USEC_DEV     TIMER_DEV(0)
+#define CONFIG_ZTIMER_USEC_MIN     (2)
 /** @} */
 
 /**

@@ -27,22 +27,12 @@ extern "C" {
 /**
  * @brief   Number of allocated parameters at @ref socket_zep_params
  *
- * @note    This was desided to only be confiruable on compile-time to be
+ * @note    This was decided to only be confiruable on compile-time to be
  *          more similar to actual boards
  */
 #ifndef SOCKET_ZEP_MAX
 #define SOCKET_ZEP_MAX              (1)
 #endif
-
-/**
- * @name   Default parameters for native argument parsing
- * @{
- */
-#define SOCKET_ZEP_PORT_DEFAULT         "17754" /**< default port */
-#define SOCKET_ZEP_LOCAL_ADDR_DEFAULT   "::"    /**< default local address */
-/**
- * @}
- */
 
 /**
  * @brief   socket_zep configurations

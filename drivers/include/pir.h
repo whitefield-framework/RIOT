@@ -22,7 +22,7 @@
 #ifndef PIR_H
 #define PIR_H
 
-#include "kernel_types.h"
+#include "sched.h"
 #include "periph/gpio.h"
 #include "stdbool.h"
 
@@ -62,11 +62,17 @@ typedef struct {
 } pir_t;
 
 /**
- * @brief   value to configure sensitivity of sensore
+ * @defgroup drivers_pir_config     PIR Motion Sensor driver compile configuration
+ * @ingroup config_drivers_sensors
+ * @{
+ */
+/**
+ * @brief   Sensitivity of sensor
  */
 #ifndef PIR_MSG_T_STATUS_START
 #define PIR_MSG_T_STATUS_START 150
 #endif
+/** @} */
 
 /**
  * @brief   event type for a PIR sensor
@@ -117,7 +123,7 @@ pir_event_t pir_get_status(const pir_t *dev);
 int pir_get_occupancy(pir_t *dev, int16_t *occup);
 
 /**
- * @brief   Register a thread for notification whan state changes on the
+ * @brief   Register a thread for notification when state changes on the
  *          motion sensor.
  *
  * @note

@@ -61,7 +61,7 @@
 #include "netdev_tap.h"
 #include "net/netopt.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 /* netdev interface */
@@ -81,16 +81,16 @@ static inline void _set_mac_addr(netdev_t *netdev, const uint8_t *src)
     memcpy(dev->addr, src, ETHERNET_ADDR_LEN);
 }
 
-static inline int _get_promiscous(netdev_t *netdev)
+static inline int _get_promiscuous(netdev_t *netdev)
 {
     netdev_tap_t *dev = (netdev_tap_t*)netdev;
-    return dev->promiscous;
+    return dev->promiscuous;
 }
 
-static inline int _set_promiscous(netdev_t *netdev, int value)
+static inline int _set_promiscuous(netdev_t *netdev, int value)
 {
     netdev_tap_t *dev = (netdev_tap_t*)netdev;
-    dev->promiscous = value;
+    dev->promiscuous = value;
     return value;
 }
 
@@ -121,7 +121,7 @@ static int _get(netdev_t *dev, netopt_t opt, void *value, size_t max_len)
             }
             break;
         case NETOPT_PROMISCUOUSMODE:
-            *((bool*)value) = (bool)_get_promiscous(dev);
+            *((bool*)value) = (bool)_get_promiscuous(dev);
             res = sizeof(bool);
             break;
         default:
@@ -144,7 +144,7 @@ static int _set(netdev_t *dev, netopt_t opt, const void *value, size_t value_len
             res = ETHERNET_ADDR_LEN;
             break;
         case NETOPT_PROMISCUOUSMODE:
-            _set_promiscous(dev, ((const bool *)value)[0]);
+            _set_promiscuous(dev, ((const bool *)value)[0]);
             res = sizeof(netopt_enable_t);
             break;
         default:
@@ -239,7 +239,7 @@ static int _recv(netdev_t *netdev, void *buf, size_t len, void *info)
 
     if (nread > 0) {
         ethernet_hdr_t *hdr = (ethernet_hdr_t *)buf;
-        if (!(dev->promiscous) && !_is_addr_multicast(hdr->dst) &&
+        if (!(dev->promiscuous) && !_is_addr_multicast(hdr->dst) &&
             !_is_addr_broadcast(hdr->dst) &&
             (memcmp(hdr->dst, dev->addr, ETHERNET_ADDR_LEN) != 0)) {
             DEBUG("netdev_tap: received for %02x:%02x:%02x:%02x:%02x:%02x\n"
@@ -302,7 +302,7 @@ static void _tap_isr(int fd, void *arg) {
     netdev_t *netdev = (netdev_t *)arg;
 
     if (netdev->event_callback) {
-        netdev->event_callback(netdev, NETDEV_EVENT_ISR);
+        netdev_trigger_event_isr(netdev);
     }
     else {
         puts("netdev_tap: _isr: no event callback.");
@@ -332,7 +332,7 @@ static int _init(netdev_t *netdev)
     const char *clonedev = "/dev/net/tun";
 #endif
     /* initialize device descriptor */
-    dev->promiscous = 0;
+    dev->promiscuous = 0;
     /* implicitly create the tap interface */
     if ((dev->tap_fd = real_open(clonedev, O_RDWR | O_NONBLOCK)) == -1) {
         err(EXIT_FAILURE, "open(%s)", clonedev);

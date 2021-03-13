@@ -7,9 +7,7 @@
  */
 
 /**
- * @defgroup    net_gnrc_tcp TCP
- * @ingroup     net_gnrc
- * @brief       RIOT's TCP implementation for the GNRC network stack.
+ * @ingroup     net_gnrc_tcp
  *
  * @{
  *
@@ -23,10 +21,10 @@
 #define NET_GNRC_TCP_TCB_H
 
 #include <stdint.h>
-#include "kernel_types.h"
 #include "ringbuffer.h"
-#include "xtimer.h"
 #include "mutex.h"
+#include "evtimer_msg.h"
+#include "evtimer_mbox.h"
 #include "msg.h"
 #include "mbox.h"
 #include "net/gnrc/pkt.h"
@@ -39,11 +37,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * @brief Size of the TCB mbox
- */
-#define GNRC_TCP_TCB_MBOX_SIZE (8U)
 
 /**
  * @brief Transmission control block of GNRC TCP.
@@ -74,11 +67,10 @@ typedef struct _transmission_control_block {
     int32_t srtt;          /**< Smoothed round trip time */
     int32_t rto;           /**< Retransmission timeout duration */
     uint8_t retries;       /**< Number of retransmissions */
-    xtimer_t tim_tout;     /**< Timer struct for timeouts */
-    msg_t msg_tout;        /**< Message, sent on timeouts */
-    gnrc_pktsnip_t *pkt_retransmit;   /**< Pointer to packet in "retransmit queue" */
-    msg_t mbox_raw[GNRC_TCP_TCB_MBOX_SIZE];   /**< Msg queue for mbox */
-    mbox_t mbox;             /**< TCB mbox for synchronization */
+    evtimer_msg_event_t event_retransmit; /**< Retransmission event */
+    evtimer_mbox_event_t event_misc;      /**< General purpose event */
+    gnrc_pktsnip_t *pkt_retransmit;       /**< Pointer to packet in "retransmit queue" */
+    mbox_t *mbox;            /**< TCB mbox for synchronization */
     uint8_t *rcv_buf_raw;    /**< Pointer to the receive buffer */
     ringbuffer_t rcv_buf;    /**< Receive buffer data structure */
     mutex_t fsm_lock;        /**< Mutex for FSM access synchronization */

@@ -29,7 +29,7 @@
 #include "cc2420_netdev.h"
 #include "cc2420_registers.h"
 
-#define ENABLE_DEBUG (0)
+#define ENABLE_DEBUG 0
 #include "debug.h"
 
 
@@ -87,7 +87,7 @@ int cc2420_init(cc2420_t *dev)
     cc2420_reg_write(dev, CC2420_REG_MDMCTRL0, reg);
 
     /* go into RX state */
-    cc2420_set_state(dev, CC2420_GOTO_RX);
+    cc2420_set_state(dev, NETOPT_STATE_IDLE);
 
     return 0;
 }
@@ -131,9 +131,11 @@ size_t cc2420_tx_prepare(cc2420_t *dev, const iolist_t *iolist)
     cc2420_strobe(dev, CC2420_STROBE_FLUSHTX);
     /* push packet length to TX FIFO */
     cc2420_fifo_write(dev, (uint8_t *)&pkt_len, 1);
-    /* push packet to TX FIFO */
+    /* push packet to TX FIFO, only if iol->iol_len > 0 */
     for (const iolist_t *iol = iolist; iol; iol = iol->iol_next) {
-        cc2420_fifo_write(dev, iol->iol_base, iol->iol_len);
+        if (iol->iol_len > 0) {
+            cc2420_fifo_write(dev, iol->iol_base, iol->iol_len);
+        }
     }
     DEBUG("cc2420: tx_prep: loaded %i byte into the TX FIFO\n", (int)pkt_len);
 
