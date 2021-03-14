@@ -24,6 +24,7 @@
 
 #include "auto_init.h"
 #include "kernel_defines.h"
+#define LOG_LEVEL LOG_DEBUG
 #include "log.h"
 
 void auto_init(void)
@@ -164,6 +165,11 @@ void auto_init(void)
         extern void nimble_riot_init(void);
         nimble_riot_init();
     }
+    if (IS_USED(MODULE_WHITEFIELD)) {
+        LOG_DEBUG("Whitefield init\n");
+		extern void gnrc_whitefield_6lowpan_init(void);
+		gnrc_whitefield_6lowpan_init();
+	}
     if (IS_USED(MODULE_AUTO_INIT_LORAMAC)) {
         LOG_DEBUG("Auto init loramac.\n");
         extern void auto_init_loramac(void);
@@ -276,11 +282,5 @@ void auto_init(void)
         extern void auto_init_screen(void);
         auto_init_screen();
     }
-
-    if (IS_USED(MODULE_WHITEFIELD)) {
-        LOG_DEBUG("Whitefield init\n");
-		extern void gnrc_whitefield_6lowpan_init(void);
-		gnrc_whitefield_6lowpan_init();
-	}
 
 }

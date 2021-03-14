@@ -29,9 +29,12 @@
 #define	WF_EVENT_RX_DONE			20000
 
 static char g_stack[(THREAD_STACKSIZE_DEFAULT + DEBUG_EXTRA_STACKSIZE)];
+static gnrc_netif_t _netif;
 #ifdef MODULE_NETSTATS_L2
 static netstats_t g_l2_stats;
 #endif
+static thread_t *_netif_thread;
+static gnrc_nettype_t _nettype = GNRC_NETTYPE_SIXLOWPAN;
 
 static gnrc_netif_t *_wf_netif = NULL;
 
@@ -115,7 +118,7 @@ static int _send(gnrc_pktsnip_t *pkt)
     /* prepare packet for sending */
     while (payload) {
 		if(len+payload->size >= sizeof(_sendbuf)) {
-			ERROR("--- READY TO CRASH len=%d size:%d sizeof(_sendbuf):%zu\n", 
+			ERROR("--- READY TO CRASH len=%d size:%d sizeof(_sendbuf):%zu\n",
 					len, payload->size, sizeof(_sendbuf));
 		}
 		assert(len+payload->size<sizeof(_sendbuf));
@@ -155,6 +158,11 @@ static int _netdev_set(netdev_t *netdev, netopt_t opt,
                 case IEEE802154_LONG_ADDRESS_LEN:
                     INFO("LONG ADDRESS LEN set\n");
                     break;
+				case NETOPT_PROTO:
+					assert(value_len == sizeof(_nettype));
+					memcpy(&_nettype, value, sizeof(_nettype));
+					res = sizeof(_nettype);
+					break;
                 default:
                     res = -ENOTSUP;
                     break;
@@ -206,13 +214,11 @@ static int _netdev_get(netdev_t *netdev, netopt_t opt,
             res = sizeof(uintptr_t);
             break;
 #endif
-#ifdef MODULE_GNRC
         case NETOPT_PROTO:
             assert(max_len == sizeof(gnrc_nettype_t));
-            *((gnrc_nettype_t *)value) = GNRC_NETTYPE_SIXLOWPAN;
+            *((gnrc_nettype_t *)value) = _nettype;
             res = sizeof(gnrc_nettype_t);
             break;
-#endif
         default:
             INFO("NETOPT not handled!! %d\n", opt);
             break;
@@ -220,6 +226,7 @@ static int _netdev_get(netdev_t *netdev, netopt_t opt,
     return res;
 }
 
+#if 0
 #define	WAIT_FOR_COND(COND, SLPTIME_MS)	\
 	{\
 		int loopcnt=0;\
@@ -231,6 +238,7 @@ static int _netdev_get(netdev_t *netdev, netopt_t opt,
 			ERROR("COND %s never reached. Behaviour Undefined!\n", #COND);\
 		}\
 	}
+#endif
 
 void *stackline_recvthread(void *args)
 {
@@ -249,9 +257,13 @@ void *stackline_recvthread(void *args)
 		m.content.ptr = pkt;
 		if(!msg_send_int(&m, _wf_netif->pid)) {
 			ERROR("msg send failed to internal q, possible lost intr\n");
-			pkt->len=0;
 		}
+#if 0
 		WAIT_FOR_COND(pkt->len==0,1000);
+		if (pkt->len) {
+			ERROR("pkt len = %d, was expecting the pkt to be consumed, pkt=%p\n", pkt->len, (void *)pkt);
+		}
+#endif
 	}
 	return NULL;
 }
@@ -305,8 +317,16 @@ static int _netdev_init(netdev_t *dev)
     return 0;
 }
 
+static void _netif_init(gnrc_netif_t *netif)
+{
+	(void)netif;
+	gnrc_netif_default_init(netif);
+	_netif_thread = thread_get_active();
+	INFO("whitefield netif_init called\n");
+}
+
 static const gnrc_netif_ops_t _wf_ops = {
-    .init = NULL,
+    .init = _netif_init,
     .send = _netif_send,
     .recv = _netif_recv,
     .get = gnrc_netif_get_from_netdev,
@@ -329,6 +349,6 @@ static netdev_t _wf_dummy_dev = {
 
 void gnrc_whitefield_6lowpan_init(void)
 {
-    gnrc_netif_create(g_stack, sizeof(g_stack), (THREAD_PRIORITY_MAIN - 1),
+    gnrc_netif_create(&_netif, g_stack, sizeof(g_stack), (THREAD_PRIORITY_MAIN - 1),
                       "WF NETAPI", &_wf_dummy_dev, &_wf_ops);
 }

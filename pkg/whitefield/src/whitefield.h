@@ -19,8 +19,20 @@
 #endif
 #include "debug.h"
 
-#define	ERROR(...)	fprintf(stderr,__VA_ARGS__)
-#define	INFO(...)	DEBUG(__VA_ARGS__)
+#define PRN(STR, ...)                                 \
+    {                                                 \
+        struct timeval tv;                            \
+        gettimeofday(&tv, NULL);                      \
+        printf("%s %5ld:%-4ld[%s:%d] ", STR,          \
+               tv.tv_sec % 100000, tv.tv_usec / 1000, \
+               __func__, __LINE__);                   \
+        printf(__VA_ARGS__);                          \
+		fflush(NULL);								  \
+    }
+
+#define	ERROR(...)	PRN("ERROR", __VA_ARGS__)
+#define	INFO(...)	PRN("INFO ", __VA_ARGS__)
+#define WARN(...)   PRN("WARN " __VA_ARGS__)
 
 typedef struct _wf_pkt_ {
 	uint8_t src[WF_L2ADDR_LEN];

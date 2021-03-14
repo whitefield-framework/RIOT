@@ -1,0 +1,15 @@
+# RIOT specific dependencies
+USEMODULE += posix_semaphore
+USEMODULE += event_callback
+USEMODULE += xtimer
+
+#USEMODULE += gnrc_netdev_default
+USEMODULE += auto_init_gnrc_netif
+USEMODULE += gnrc_ipv6_default
+USEMODULE += sock_udp
+USEMODULE += gnrc_ipv6_nib_6lr
+USEMODULE += gnrc_sixlowpan
+USEMODULE += gnrc_sixlowpan_iphc
+USEMODULE += gnrc_sixlowpan_iphc_nhc
+USEMODULE += gnrc_rpl
+USEMODULE += gnrc_netif_single
